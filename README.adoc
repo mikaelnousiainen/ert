@@ -37,6 +37,14 @@ as a mobile station in a chase car.
 
 See link:ertgateway/README.adoc[ertgateway documentation and installation instructions].
 
+== Web-based user interface: ertgateway-ui-web
+
+`ertgateway-ui-web` is a web-based user interfaces that provides access to the telemetry data messages and images
+received and collected by `ertgateway`. The user interface source code is in another repository and it has to be built
+and installed separately from the rest of the application.
+
+See link:https://github.com/mikaelnousiainen/ertgateway-ui-web/[ertgateway-ui-web source code in GitHub].
+
 == Application internals
 
 The project code is arranged in modules and layers, so that higher-level code uses plain C11 and POSIX APIs.

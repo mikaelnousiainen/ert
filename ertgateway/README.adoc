@@ -165,3 +165,11 @@ Run `ertgateway`: (uses `sudo` with root privileges, which are needed for GPIO a
 
 ./ertgateway-start.sh # Run as a background daemon
 ----
+
+=== Installing the user interface `ertgateway-ui-web`
+
+`ertgateway-ui-web` is a web-based user interfaces that provides access to the telemetry data messages and images
+received and collected by `ertgateway`. The user interface source code is in another repository and it has to be built
+and installed separately from the rest of the application.
+
+See link:https://github.com/mikaelnousiainen/ertgateway-ui-web/[ertgateway-ui-web source code in GitHub].
