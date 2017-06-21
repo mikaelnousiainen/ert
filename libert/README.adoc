@@ -1,0 +1,381 @@
+= libert
+
+`libert` is a library containing a collection of hardware drivers, abstractions and commonly used routines needed to
+develop embedded applications on Linux and Raspberry Pi (although most of the code is generic and can be used on
+other hardware platforms too). It also includes some more specific functionality for ERT, such as the data logger
+and sensor APIs. The library code is organized in modules that can be used as basic building blocks for
+higher-level applications.
+
+== Components
+
+=== HAL
+
+Low-level hardware access routines have been wrapped to more generic routines for accessing:
+
+* GPIO pins and related interrupts, based on WiringPi
+* SPI-bus, based on Linux SPI device files and `ioctl` access
+* I^2^C-bus, based on Linux I^2^C device files and `ioctl` access
+* Serial port, based on serial port device files and POSIX serial port API
+
+=== Hardware drivers
+
+The `ertlib` library has a collection of drivers that implement routines interacting directly with the following hardware devices:
+
+* link:https://shop.pimoroni.com/products/display-o-tron-hat[Display-o-tron HAT] -related drivers
+** link:http://www.lcd-module.com/eng/pdf/zubehoer/st7036.pdf[ST7036] LCD screen driver (SPI)
+** link:http://www.si-en.com/product.asp?pid=1665[SN3218] RGB LED array driver (I2C)
+** link:http://www.microchip.com/wwwproducts/en/CAP1166[CAP1xxx] button and LED array driver (I2C)
+* link:http://www.hoperf.com/rf_transceiver/lora/RFM96W.html[HopeRF RFM9xW] / link:http://www.semtech.com/wireless-rf/rf-transceivers/sx1276/[Semtech SX127x] LoRa radio module driver (SPI)
+* GSM modem driver for SMS messaging (uses AT command set via serial port)
+
+=== Sensor API
+
+The sensor API is an abstraction which supports pluggable _sensor modules_ that supply sensor readings
+from one or more sensors. Each sensor is identified by a unique ID number, sensor name and manufacturer.
+Additionally, every sensor can provide multiple readings, or _sensor values_, where each sensor value
+is identified by sensor value ID, type ID and a textual description. The unit, such as Celsius, of the sensor value
+can also be specified.  A sensor may output either a single or three (x, y, z) 64-bit floating-point values,
+depending on the sensor type.
+
+The serialized output of sensor API data gives a good overview on the abstraction:
+
+[source,json]
+----
+{
+  "sensor_modules": [
+    {
+      "name": "RTIMULib",
+      "sensors": [
+        {
+          "id": 1,
+          "name": "LPS25H",
+          "model": "LPS25H",
+          "manufacturer": "",
+          "available": true,
+          "values": [
+            {
+              "type": 19,
+              "label": "Barometric pressure",
+              "unit": "hPa",
+              "available": true,
+              "value": 1014.847412109375
+            },
+            {
+              "type": 17,
+              "label": "Temperature",
+              "unit": "C",
+              "available": true,
+              "value": 28.852083206176758
+            },
+            {
+              "type": 22,
+              "label": "Altitude estimate",
+              "unit": "m",
+              "available": true,
+              "value": -13.288722745008519
+            }
+          ]
+        },
+        {
+          "id": 2,
+          "name": "HTS221",
+          "model": "HTS221",
+          "manufacturer": "",
+          "available": true,
+          "values": [
+            {
+              "type": 18,
+              "label": "Relative humidity",
+              "unit": "%",
+              "available": true,
+              "value": 22.480850219726562
+            },
+            {
+              "type": 17,
+              "label": "Temperature",
+              "unit": "C",
+              "available": true,
+              "value": 29.843997955322266
+            }
+          ]
+        },
+        {
+          "id": 3,
+          "name": "LSM9DS1",
+          "model": "LSM9DS1",
+          "manufacturer": "",
+          "available": true,
+          "values": [
+            {
+              "type": 161,
+              "label": "Accelerometer",
+              "unit": "m/s^2",
+              "available": true,
+              "x": 0.44267216332405801,
+              "y": -0.3302094941612333,
+              "z": -9.8751781773030753
+            },
+            {
+              "type": 164,
+              "label": "Accelerometer residuals",
+              "unit": "m/s^2",
+              "available": true,
+              "x": 1.4191916756302116,
+              "y": 2.3741011214137075,
+              "z": 0.46633214811384677
+            },
+            {
+              "type": 20,
+              "label": "Accelerometer magnitude",
+              "unit": "m/s^2",
+              "available": true,
+              "value": 9.8906095551908013
+            },
+            {
+              "type": 162,
+              "label": "Gyroscope",
+              "unit": "deg/s",
+              "available": true,
+              "x": 0.097438198038932528,
+              "y": 0.074140422780019033,
+              "z": -0.61695188454191696
+            },
+            {
+              "type": 163,
+              "label": "Magnetometer",
+              "unit": "uT",
+              "available": true,
+              "x": 60.091953277587891,
+              "y": -70.885871887207031,
+              "z": -46.205570220947266
+            },
+            {
+              "type": 21,
+              "label": "Magnetometer magnitude",
+              "unit": "uT",
+              "available": true,
+              "value": 103.78248596191406
+            },
+            {
+              "type": 177,
+              "label": "Orientation",
+              "unit": "deg",
+              "available": true,
+              "x": 167.74400918493384,
+              "y": -10.944455215633836,
+              "z": 57.714948222446004
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "sysinfo",
+      "sensors": [
+        {
+          "id": 1,
+          "name": "sysinfo",
+          "model": "sysinfo()",
+          "manufacturer": "Linux",
+          "available": true,
+          "values": [
+            {
+              "type": 66,
+              "label": "System uptime",
+              "unit": "s",
+              "available": true,
+              "value": 418680.0
+            },
+            {
+              "type": 67,
+              "label": "Load average (1 minute)",
+              "unit": "CPUs",
+              "available": true,
+              "value": 0.40087890625
+            },
+            {
+              "type": 68,
+              "label": "Memory used",
+              "unit": "%",
+              "available": true,
+              "value": 69.459439551304314
+            },
+            {
+              "type": 69,
+              "label": "Swap used",
+              "unit": "%",
+              "available": true,
+              "value": 2.0235165436149893
+            },
+            {
+              "type": 70,
+              "label": "Process count",
+              "unit": "processes",
+              "available": true,
+              "value": 120.0
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
+----
+
+The `libert` code includes sensor module definitions for the following purposes:
+
+* `rtimulib`: RTIMULib module that auto-detects supported sensors
+** RTIMULib supports a wide range of sensors, including temperature, air humidity, atmospheric pressure
+   and many Inertial Measurement Unit (IMU) sensors
+** Data obtained from an IMU includes accelerometer, gyroscope and magnetometer readings
+** RTIMULib derives object orientation based on values read from an IMU
+** All Sense HAT sensors are supported by this module
+* `sysinfo`: A Linux-specific system information sensor module
+** Uses `sysinfo()` call to obtain system uptime, load average, memory usage, swap usage and process count
+
+=== GPS API
+
+The GPS API is an abstraction on retrieving GPS position data. The data model is derived from
+link:http://www.catb.org/gpsd/[GPSd service daemon software] and there is a GPSd daemon client-based implementation
+included in `libert`. Other types of GPS drivers can be supported too. Because of the nature of incoming GPS data
+updates, where the GPS must be read actively to receive up-to-date data, the API provides a background thread
+constantly reading data from the GPS module. The latest GPS data is cached, so that it can be read at any time.
+
+An example of the serialized GPS data looks like:
+
+[source,json]
+----
+{
+  "gps": {
+    "has_fix": true,
+    "mode": "3D",
+    "satellites_visible": 10,
+    "satellites_used": 6,
+    "skyview_time_seconds": null,
+    "time": "2017-05-17T09:06:01.000Z",
+    "time_seconds": 1495011961.0,
+    "time_uncertainty_seconds": 0.0050000000000000001,
+    "latitude_degrees": 61.0,
+    "latitude_uncertainty_meters": 22.515000000000001,
+    "longitude_degrees": 24.0,
+    "longitude_uncertainty_meters": 11.711,
+    "altitude_meters": 33.630000000000003,
+    "altitude_uncertainty_meters": 137.77000000000001,
+    "track": 30.994299999999999,
+    "track_uncertainty_degrees": null,
+    "speed_meters_per_sec": 0.35199999999999998,
+    "speed_uncertainty_meters_per_sec": 1.1100000000000001,
+    "climb_meters_per_sec": 0.35199999999999998,
+    "climb_uncertainty_meters_per_sec": 275.54000000000002
+  }
+}
+----
+
+=== Data logger API
+
+The data logger API provides tools to collect data from GPS API, sensor API and communication devices.
+Data logger packages and serializes all of this data into serialized format, which is referred to as _telemetry data message_.
+Serialization is necessary so that the data can be transmitted by the tracker (`ertnode`) to
+the receiver (`ertgateway`) in a standardized format.
+
+`libert` uses two data formats for telemetry data messages:
+
+* link:http://msgpack.org/[MsgPack] for transferring data over radio connection, because MsgPack is a binary format
+  that is very compact in order to make radio transmissions as short as possible
+* JSON for logging telemetry data messages on local disk and as response data format in the HTTP API for web browsers
+
+=== Communications device API for radio devices
+
+The communications device API is a collection of operations (functions) that need to be implemented by a device.
+The set of operations is largely based on HopeRF RFM9xW LoRa radio chip, which is currently the only implementation,
+but are generic enough to be implemented by basically any device. While the API is designed for radio communications,
+the abstractions makes it possible to use other types of communication media.
+
+A driver implementing the API needs to provide callbacks (usually handled with hardware interrupts) for
+end of transmission and for received packets.
+
+A comm device collects data transfer statistics, which are included in a telemetry data message:
+
+[source,json]
+----
+{
+  "comm_devices": [
+    {
+      "name": "RFM9xW",
+      "model": "SX127x/RFM9xW",
+      "manufacturer": "Semtech/HopeRF",
+      "current_rssi": -98.0,
+      "last_received_packet_rssi": -28.0,
+      "transmitted_packet_count": 195,
+      "transmitted_bytes": 0,
+      "received_packet_count": 37,
+      "received_bytes": 538,
+      "invalid_received_packet_count": 0,
+      "frequency": 434250000.0,
+      "frequency_error": -4534.0426239999997
+    }
+  ]
+}
+----
+
+=== Communications transceiver API
+
+The communications transceiver API provides high-level, thread-safe access to a communications device,
+so that multi-threaded applications can transmit and receive data safely. The data transmission call
+is synchronous and blocks until a packet is transmitted (or the transmission fails). Transmitted packets
+are queued internally so that simultaneous transmission of packets by multiple threads will result in
+interleaving of the packets as each thread can only transmit and enqueue one packet at a time.
+The reception of a packet is signaled asynchronously by executing a callback routine.
+
+A transceiver instance can be either in transmit or receive mode, which is controlled using a simple flag.
+The transceiver also controls the power-saving state of the underlying comm device, so that it is put to sleep mode
+when there is no activity (in transmit mode).
+
+=== Communications protocol implementation
+
+The communications protocol is an implementation of a TCP-like, reliable, stream-oriented protocol. It is built on top
+of the transceiver API. The comm protocol is the most complex part of the tracker and is described in detail
+in link:../doc/comm-protocol.adoc[the comm protocol documentation].
+
+Also the comm protocol collects data transfer statistics, which are included in telemetry data.
+The statistics are included inside the JSON object containing statistics for the related comm device:
+
+[source,json]
+----
+{
+  "comm_devices": [
+    {
+
+      // ... comm device statistics ...
+
+      "comm_protocol": {
+        "transmitted_packet_count": 195,
+        "transmitted_data_bytes": 47708,
+        "transmitted_payload_data_bytes": 46928,
+        "duplicate_transmitted_packet_count": 0,
+        "retransmitted_packet_count": 0,
+        "retransmitted_data_bytes": 0,
+        "retransmitted_payload_data_bytes": 0,
+        "received_packet_count": 0,
+        "received_data_bytes": 0,
+        "received_payload_data_bytes": 0,
+        "duplicate_received_packet_count": 0,
+        "received_packet_sequence_number_error_count": 0,
+        "invalid_received_packet_count": 0
+      }
+    }
+  ]
+}
+----
+
+=== Utilities
+
+* `ert-log`: Application logger abstraction based on `zlog`
+* `ert-buffer-pool`: Memory buffer pool
+* `ert-ring-buffer`: Ring buffer
+* `ert-pipe`: Synchronized, blocking queue implementation (3rd party)
+* `ert-process`: Child process management routines
+* `ert-event-emitter`: A simple event emitter
+* `ert-mapper`: Configuration option data mapper
+* `ert-yaml`: YAML configuration reader based on `libyaml` and the config data mapper
+

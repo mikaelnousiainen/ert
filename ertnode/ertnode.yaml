@@ -1,0 +1,136 @@
+global:
+  device_name: "ertnode"
+  device_model: "RPi"
+
+gps:
+  gpsd:
+    enabled: true
+    host: "localhost"
+    port: 2947
+
+telemetry_sender:
+  enabled: true
+  telemetry_collect_interval_seconds: 1
+  telemetry_send_interval: 20
+  minimal_telemetry_data_send_interval: 2
+
+image_sender:
+  enabled: true
+  image_capture_interval_seconds: 1
+  image_send_interval: 1
+  raspistill_command: "/usr/bin/raspistill"
+  convert_command: "/usr/bin/convert"
+  horizontal_flip: false
+  vertical_flip: false
+  image_path: "./image"
+  original_image:
+    quality: 90
+  transmitted_image:
+    width: 410
+    height: 308
+    format: "webp"
+    quality: 65
+
+server:
+  enabled: true
+  port: 9000
+  buffer_length: 32768
+  image_path: "./image"
+  static_path: "./static"
+  data_logger:
+    path: "./log"
+    node_filename_template: "ertnode-data-logger-node.%Y-%m-%d.log"
+
+comm_protocol:
+  passive_mode: false
+  transmit_all_data: true
+  ignore_errors: false
+  #receive_buffer_length_packets: 64
+  #stream_inactivity_timeout_millis: 20000
+  #stream_acknowledgement_interval_packet_count: 32
+  #stream_acknowledgement_receive_timeout_millis: 1000
+  #stream_acknowledgement_guard_interval_millis: 50
+  #stream_acknowledgement_max_rerequest_count: 5
+  #stream_end_of_stream_acknowledgement_max_rerequest_count: 2
+  #transmit_stream_count: 16
+  #receive_stream_count: 32
+
+comm_transceiver:
+  #transmit_buffer_length_packets: 16
+  #receive_buffer_length_packets: 64
+  #transmit_timeout_milliseconds: 30000
+  #poll_interval_milliseconds: 1000
+  #maximum_receive_time_milliseconds: 5000
+
+comm_devices:
+  rfm9xw:
+    spi:
+      bus_index: 0
+      device_index: 1
+      clock_speed: 500000
+    pins:
+      dio0: 27
+      dio5: 26
+    receive_single_after_detection: false
+    transmit:
+      pa_boost: true
+      pa_output_power: 15 # Output power range: 0..15
+      pa_max_power: 7 # Max power range: 0..7
+      frequency: 434250000
+      implicit_header_mode: false
+      error_coding_rate: "4:5"
+      bandwidth: "62K5"
+      spreading_factor: 8
+      crc: true
+      low_data_rate_optimize: false
+      expected_payload_length: 0
+      preamble_length: 8
+      iq_inverted: false
+      receive_timeout_symbols: 0
+      frequency_hop_enabled: false
+      frequency_hop_period: 0
+    receive:
+      pa_boost: true
+      pa_output_power: 15 # Output power range: 0..15
+      pa_max_power: 7 # Max power range: 0..7
+      frequency: 434250000
+      implicit_header_mode: false
+      error_coding_rate: "4:5"
+      bandwidth: "62K5"
+      spreading_factor: 8
+      crc: true
+      low_data_rate_optimize: false
+      expected_payload_length: 0
+      preamble_length: 8
+      iq_inverted: false
+      receive_timeout_symbols: 0
+      frequency_hop_enabled: false
+      frequency_hop_period: 0
+
+      # Low data rate example:
+      # implicit_header_mode: false
+      # error_coding_rate: "4_8"
+      # bandwidth: "20K8"
+      # crc: true
+      # low_data_rate_optimize: true
+      # expected_payload_length: 0
+      # preamble_length: 8
+      # iq_inverted: false
+      # receive_timeout_symbols: 0
+
+gsm_modem:
+  enabled: false
+  sms_telemetry_enabled: false
+  sms_telemetry_send_interval: 10
+  destination_number: "+358401234567"
+  modem:
+    command_queue_size: 10
+    poll_interval_millis: 500
+    response_timeout_millis: 5000
+    pin: "1111"
+    retry_count: 3
+    serial_device:
+      device: "/dev/ttyUSB0"
+      parity: false
+      stop_bits_2: false
+      speed: 115200

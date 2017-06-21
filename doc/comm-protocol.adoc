@@ -1,0 +1,162 @@
+= Communication protocol
+
+With low-power digital radio modulation technologies, such as LoRa, the packet size is usually quite small: 255 bytes
+in the case of LoRa. Data, including full telemetry and images, gathered by the tracker does not simply fit to
+a single packet, so additional coordination is needed to reliably receive the full set of data spanning multiple
+packets. Additionally, the type of data a packet contains must be made identifiable, since there are multiple types of
+data transmitted by the tracker.
+
+In order to achieve reliable and easy-to-use radio communication between the node (transmitter) and the gateway (receiver),
+`libert` implements a TCP-like protocol, called _comm protocol_, that can be used over any packet-based
+transmission medium. The only requirement for the protocol to work is that the system responsible for packet transfer
+must detect transmission errors, so that packets containing erroneously received data can be discarded.
+
+The protocol provides:
+
+* Multiplexing for concurrent streams using stream IDs
+* Identification of data type with port numbers
+* Ordered transmission and reassembly of out-of-order packets using packet sequence numbers
+* Detection and retransmission of lost packets using positive acknowledgements
+* Option to automatically retransmit all data if acknowledgements are not received, increasing possibility of successful reception of data
+
+The *comm protocol* implementation requires the following features, from the underlying abstraction of the device used for communications:
+
+* data transmission call: a synchronous (blocking) and thread-safe call that transmits a single packet of raw data
+* data reception callback: an asynchronous notification for a received packet, including the packet data and its length
+* the maximum size of a packet in bytes
+
+These features are implemented by the *comm transceiver API*.
+
+== Packet structure
+
+The protocol works basically with any packet length, considering that it adds a header of 4 bytes to each packet.
+
+* TODO: Draw packet structure (find a good tool?)
+
+The packet header includes all information necessary to implement features for reliable packet transfer:
+
+* **`ID` (1 byte):** Comm protocol packet identifier byte `0x95` to signal that this is a valid comm protocol packet
+* **`SI` (4 bits):** Stream ID for multiplexing concurrent data transfer streams
+* **`PN` (4 bits):** Port number to identify data application and purpose
+* **`SQ` (1 byte):** Packet sequence number to guarantee ordered reception of packets and reassembly in case of data transfer errors
+* **`FL` (1 byte):** 1-bit flags to signal the following conditions:
+** **`SS`:** Start of stream
+** **`ES`:** End of stream
+** **`RA`:** Request for acknowledgements (bit set in a packet sent by the transmitter)
+** **`DA`:** Delivery of acknowledgements
+** **`AE`:** Whether stream has acknowledgements enabled
+** **`RP`:** Whether the packet is a retransmitted packet
+
+There is no support for source and destination addresses, which is a design choice in order to save
+a couple of bytes in the packet header size. For addresses to work properly, it would be necessary to use some
+sort of time-division multiplexing (TDM) to allow multiple devices to transmit on the same frequency without
+interfering each other. This could be a feature for a future version of the protocol, if there is need to
+communicate with multiple objects -- which could be useful in case of static IoT nodes, such as weather stations.
+
+== Data streams
+
+A data stream is a continuous stream of bytes, much like a TCP-stream. The combination of packet stream ID and port
+is used to identify a unique stream of data, so that there can be a total of 16 concurrent streams per port. Stream IDs
+are picked sequentially and reused after closing a stream. The port number can be freely chosen for a stream to
+represent the type of data transferred in the stream. Special flags are used to signal the first (`SS` flag)
+and the last packet (`ES` flag) of a data stream.
+
+=== Data transmission
+
+Transmitted data is automatically split in packets, so that full packet length is used for all packets except for
+the last one, unless the stream is flushed before closing the stream. The transmitter will store a queue of all
+transmitted packets (limited by the queue size), so that it can retransmit packets not received correctly by a receiver.
+The mechanism of requesting retransmissions is handled using acknowledgements, which is documented below.
+
+=== Data reception
+
+Each packet is assigned an 8-bit sequence number by the transmitter so that a receiver is able to identify packets and
+their correct order. This makes it possible to detect missing packets. When the receiver detects a missing packet
+(based on the sequence numbers), following packets that are received will be queued by the receiver until the receiver
+is able to request retransmissions for the missing packets and drain the queue. If the queue is full, new packets will
+simply be discarded and the receiver waits for a packet that requests acknowledgements, so that it can request
+retransmissions of missing packets.
+
+If reliable transmission is not required, acknowledgements can be turned off by leaving the flag `AE` unset.
+In this case, the receiver will simply concatenate any data it receives, even if it detects missing packets.
+
+=== Stream timeouts
+
+The comm protocol keeps internally track of time passed while waiting for certain events to happen. Waiting for
+the following events may time out, which marks a stream *failed* so that it cannot be used anymore:
+
+* Transmitter waiting for acknowledgements, defaults to 1 second. Acknowledgements are re-requested two times before failing.
+* Transmitter waiting for new packet to be transmitted in a stream, timeout defaults to 20 seconds.
+* Receiver waiting for a packet to be received in a stream, timeout defaults to 20 seconds. The packet may also be a retransmitted packet.'
+
+These timeouts allow data transfer operations to fail gracefully if there is a problem in communications.
+
+== Acknowledgements handling
+
+An _acknowledgement_ is a piece of data that the transmitter expects to receive from the receiver device
+as a confirmation of a successfully received packet. When acknowledgements are enable with the `AE` flag, the
+transmitter requires that every packet is acknowledged by the receiver. Acknowledgements are sent by the receiver
+in a packet that uses port 15 and has the `DA` flag set to indicate delivery of acknowledgements. The packet payload
+consists of one or multiple packet acknowledgement data structures.
+
+The acknowledgement data structure contains information necessary to uniquely identify a packet:
+
+* **`SI` (4 bits):** Stream ID for multiplexing concurrent data transfer streams
+* **`PN` (4 bits):** Port number to identify data application and purpose
+* **`SQ` (1 byte):** Packet sequence number to guarantee ordered reception of packets and reassembly in case of data transfer errors
+
+Transmission of acknowledgements and retransmitted packets has to be carefully coordinated between the transmitter
+and the receiver, because the transmission medium -- the radio link -- is half-duplex: data is transferred only in one
+direction at a time. This means that the receiver cannot simply send acknowledgements for received packets or ask for
+retransmissions, because the transmitter may not be listening for packets. In order to solve this problem, the
+transmitter is responsible for periodically requesting acknowledgements from the receiver.
+The `RA` (request for acknowledgements) flag in the packet header is used for this purpose. The frequency of
+acknowledgement requests (= the number of packets transmitted between ack requests) needs to be configured so that
+it is less than or equal to the size of the queue for received packets of the receiver. This ensures that the
+the receiver can store all successfully received packets in the queue without discarding any of them, so that
+the queue is never full.
+
+=== Acknowledgements processing sequence
+
+The following describes the sequence of packet transmissions for stream using acknowledgements:
+
+`N` = Number of packets to transmit between acknowledgement requests
+
+1. Transmitter transmits `N` packets, where the last packet has `RA` flag enabled
+2. Transmitter switches comm device to receive mode and begins waiting an acknowledgement packet
+3. Receiver detects the `RA` flag and creates an acknowledgement packet based on sequence numbers of all packets it
+   has received since it sent acknowledgements last time
+4. Receiver delays transmission of acknowledgements to let transmitter finish switching mode. This guard interval
+   defaults to 50 milliseconds.
+5. Receiver transmits the acknowledgement packet and switches immediately back to receive mode
+6. Transmitter receives the acknowledgement packet and removes packets with matching sequence and stream numbers from its queue
+7. Transmitter delays transmission of next packet to let receiver finish switching mode (guard interval of 50 ms)
+8. Transmitter checks if there are packets left in the queue and retransmits them with `RP` flag set
+9. Transmitter continues sending new packets from the stream until the next `N` packets or end of stream is reached,
+   which is when it requests acknowledgements again
+
+Exceptions:
+
+* Step 6: If the transmitter does not receive an acknowledgement packet for whatever reason (it could even be
+  that the receiver did not receive the packet requesting acknowledgements!), it will retransmit the packet
+  for acknowledgement request and wait for acknowledgements two times. If not acknowledgements are received
+  after these retries, the stream will be marked *failed* and closed.
+
+== Passive mode
+
+A receiver can be set to _passive mode_, which disables all packet transmissions for the receiver.
+In practice it means disabling of acknowledgements. This allows use of multiple receivers, where one of them can still
+send acknowledgements to the transmitter.
+
+A passive receiver will attempt to collect all received packets, including retransmissions, to assemble a stream of
+correctly received data. In case of a missing packet (where no retransmissions could be received),
+a full packet of zeroes will be inserted in place of the packet instead of failing reception of a stream.
+
+== Transmit all data mode
+
+In _transmit all data mode_, a transmitter will not mark a stream failed if no acknowledgements are received.
+Instead, in case of missing acknowledgements, all packets in the transmitter queue are first retransmitted once,
+after which the queue is cleared so that transmission can continue. This mode enables transmission of all data even if
+the transmitter is not able to receive acknowledgements, which is useful for in cases where a receiver hears
+the transmitted signal, but the transmitter cannot hear receiver's acknowledgements, and when passive receivers are
+used, since they will not transmit acks anyway.

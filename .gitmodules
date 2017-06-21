@@ -1,0 +1,18 @@
+[submodule "deps/zlog"]
+	path = deps/zlog
+	url = https://github.com/mikaelnousiainen/zlog.git
+[submodule "deps/jansson"]
+	path = deps/jansson
+	url = https://github.com/mikaelnousiainen/jansson.git
+[submodule "deps/msgpack-c"]
+	path = deps/msgpack-c
+	url = https://github.com/mikaelnousiainen/msgpack-c.git
+[submodule "deps/libwebsockets"]
+	path = deps/libwebsockets
+	url = https://github.com/mikaelnousiainen/libwebsockets.git
+[submodule "deps/RTIMULib"]
+	path = deps/RTIMULib
+	url = https://github.com/mikaelnousiainen/RTIMULib.git
+[submodule "deps/WiringPi"]
+	path = deps/WiringPi
+	url = https://github.com/mikaelnousiainen/WiringPi.git

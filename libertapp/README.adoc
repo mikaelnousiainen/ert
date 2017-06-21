@@ -1,0 +1,6 @@
+= libertapp
+
+`libertapp` implements high-level features that are specific and common to both `ertnode` and `ertgateway`.
+Most of the code consists of the implementation of the HTTP and WebSocket server and related API endpoint routines.
+
+See the link:../doc/http-and-websocket-api.adoc[HTTP and WebSocket API documentation].

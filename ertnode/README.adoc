@@ -1,0 +1,191 @@
+= ertnode
+
+`ertnode` is an application that performs the actual tracking: it should be run in a device attached to the object that
+needs to be tracked, e.g. a weather balloon or a vehicle. It collects telemetry data and takes photographs
+(currently only with Raspberry Pi camera) and transmits them using LoRa radio modulation to `ertgateway` receivers.
+
+== Features
+
+The current design consists of concurrently running threads performing data collection and data transmissions
+simultaneously and independently. This design allows independent configuration of data collection and transmission
+intervals/schedules, so that the application may store more fine-grained telemetry and image data locally than what
+it transmits to receivers.
+
+There are two data collection threads in the application:
+
+* Telemetry data collector, which logs the collected telemetry to local disk
+* Image capture routine, which takes photographs and saves them to local disk
+
+The respective data transmission threads are:
+
+* Telemetry sender, serializing the latest piece of telemetry data to MsgPack format and transmitting via radio
+* Image sender, transmitting a resized thumbnail version of the latest image captured
+
+The transmission threads may transmit data simultaneously, so packets containing telemetry and image data
+will be interleaved in the radio transmissions.
+
+In order to improve chances for successfully received telemetry data messages, there are two types
+of messages sent by the telemetry sender: messages with full data and description strings and messages with only
+the GPS data and a couple of sensor readings without string descriptions. The former amounts currently  to about
+1000 bytes of data, which results in 4 LoRa packets to be transmitted, and the latter, abbreviated telemetry data
+message is designed to fit in one 251-byte packet payload. The possibility of successfully receiving one of these
+one-packet messages is significantly higher than data spanning multiple packets, especially when the received
+radio signal is very weak.
+
+In addition to the tracking-related functionality, `ertnode` runs also the same web server as `ertgateway`,
+providing HTTP and WebSocket APIs to monitor and inspect the data it transmits in real time. The `ertgateway-ui-web`
+web UI can be used with `ertnode`, although it is mainly useful for testing and debugging purposes.
+
+== Hardware requirements
+
+The minimum hardware requirements for running `ertnode` are:
+
+* A Raspberry Pi model A+, B+, Zero, 2B or 3B (any model with 40-pin GPIO connector)
+** Other single-board computers can be used by implementing support for accessing GPIO pins and
+   registering GPIO interrupts.
+* A GPS receiver supported by `gpsd` -- any receiver outputting NMEA format data through serial port should work.
+** For example: link:https://www.modmypi.com/raspberry-pi/breakout-boards/hab-supplies/raspberry-pi-gps-hat/[Raspberry Pi GPS HAT] from ModMyPi
+* A Semtech SX127x / HopeRF RFM9xW LoRa transceiver connected to Raspberry Pi SPI port.
+** Additionally LoRa chip DIO0 and DIO5 interrupts need to be exposed through Raspberry Pi GPIO pins.
+** For example: link:https://store.uputronics.com/index.php?route=product/product&path=61&product_id=68[Raspberry Pi+ LoRa(TM) Expansion Board]  from Uputronics
+* *Optional:* I^2^C sensors supported by RTIMULib, such as the ones in link:https://www.modmypi.com/raspberry-pi/breakout-boards/raspberry-pi-(official)/raspberry-pi-sense-hat/[Raspberry Pi Sense HAT]
+* *Optional:* A link:https://www.modmypi.com/raspberry-pi/camera/raspberry-pi-camera-board-v2-8mp1080p/[Raspberry Pi camera] connected via the CSI port
+** Support for other cameras is very easy to implement
+
+== Installation
+
+These installation instructions are for Raspberry Pi and Raspbian, but most of it should work on any distribution.
+The main difference between distributions is usually just how the dependencies and libraries are installed.
+
+=== Dependency installation
+
+Install library and tool dependencies:
+
+[source,bash]
+----
+apt-get install cmake make gcc git
+apt-get install ntp gpsd libgps21 libgps-dev libyaml-0-2 libyaml-dev
+apt-get install libraspberrypi-bin webp imagemagick
+----
+
+=== Raspberry Pi configuration
+
+Enable peripheral interfaces in Raspberry Pi by adding the following to `/boot/config.txt`:
+
+[source]
+----
+# Enable I2C
+dtparam=i2c_arm=on
+
+# Enable SPI
+dtparam=spi=on
+
+# Enable serial port UART for GPS
+enable_uart=1
+
+# Enable use of PPS time signal through GPIO (if exposed by GPS receiver)
+dtoverlay=pps-gpio,gpiopin=4
+
+# Enable Raspberry Pi camera
+start_x=1
+----
+
+=== GPSd and NTP configuration
+
+Configure GPSd to use Raspberry Pi internal serial port (assuming GPS is connected to it).
+*Replace the contents* of file `/etc/default/gpsd` with the following configuration:
+
+[source]
+----
+# Default settings for the gpsd init script and the hotplug wrapper.
+
+# Start the gpsd daemon automatically at boot time
+START_DAEMON="true"
+
+# Use USB hotplugging to add new USB devices automatically to the daemon
+USBAUTO="true"
+
+# Devices gpsd should collect to at boot time.
+# They need to be read/writeable, either by user gpsd or the group dialout.
+DEVICES="/dev/ttyAMA0"
+
+# Other options you want to pass to gpsd
+GPSD_OPTIONS="-n"
+----
+
+The time data and signals from a GPS receiver can be used to feed the NTP daemon,
+so that Raspberry Pi can keep correct time as long as it has GPS lock.
+
+Some GPS receivers expose PPS signal, which can be fed to Raspberry Pi GPIO for extra accuracy.
+There is more information about using PPS signal on link:http://www.satsignal.eu/ntp/Raspberry-Pi-NTP.html[these]
+link:https://github.com/flok99/rpi_gpio_ntpd[sites].
+To use the PPS signal, an additional utility needs to be installed:
+
+[source,bash]
+----
+git clone https://github.com/flok99/rpi_gpio_ntpd.git
+cd rpi_gpio_ntpd
+make
+sudo make install
+----
+
+Run the utility at boot time by adding the following to `/etc/rc.local`:
+
+[source,bash]
+----
+# Use GPIO18 (pin 12) for GPS PPS signal
+/usr/local/bin/rpi_gpio_ntp -N 1 -g 18
+----
+
+Add the following configuration to `/etc/ntp.conf`:
+
+[source]
+----
+# GPS Serial data reference
+server 127.127.28.0 minpoll 4 maxpoll 4
+fudge 127.127.28.0 time1 0.0 refid GPS
+
+# GPS PPS reference
+server 127.127.28.1 minpoll 4 maxpoll 4 prefer
+fudge 127.127.28.1 refid PPS
+----
+
+Enable GPSd and NTP daemon by executing:
+
+[source,bash]
+----
+systemctl enable gpsd
+systemctl start gpsd
+
+systemctl enable ntp
+systemctl start ntp
+----
+
+Reboot Raspberry Pi to make all config changes take effect.
+
+=== Building `ertnode`
+
+Check out source code and build it:
+
+[source,bash]
+----
+git clone https://github.com/mikaelnousiainen/ert.git
+mkdir -p build/ertnode
+cd build/ertnode
+cmake ../../ert/ertnode
+make
+----
+
+=== Configuring `ertnode`
+
+Configure the application by editing `ertnode.yaml` in the `build/ertnode` directory.
+
+=== Running `ertnode`
+
+Run `ertnode`: (uses `sudo` with root privileges, which are needed for GPIO access)
+[source,bash]
+----
+./ertnode-start-dev.sh # Run on foreground
+
+./ertnode-start.sh # Run as a background daemon
+----

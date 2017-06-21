@@ -1,0 +1,167 @@
+= ertgateway
+
+`ertgateway` is responsible for receiving telemetry data messages and images transmitted by `ertnode` and
+for providing network APIs and a user interface (with `ertgateway-ui-web`) to view the received data. The device
+running `ertgateway` can be used as a fixed base station or, in the case of tracking high-altitude balloons,
+as a mobile station in a chase car.
+
+== Features
+
+The received telemetry data messages are stored in JSON format to local log files, identically to `ertnode`, and
+all received images are also stored on local disk. In addition to collecting telemetry data from the node,
+`ertgateway` runs a telemetry data collector thread similar to `ertnode`: it logs the gateway location
+(if GPS is installed), data transfer statistics and system information to separate log files. The latest telemetry data
+message received from the node is also stored with each gateway log message
+to make correlation easy for data analysis later.
+
+To aid mobile use of the gateway device, most useful details of the telemetry can be displayed on
+a ST7036-compatible SPI-bus-based LCD-screen. The screen driver code is mainly aimed to be used with
+the link:https://www.modmypi.com/raspberry-pi/breakout-boards/pimoroni/pimoroni-display-o-tron-hat[Display-O-Tron HAT]
+where the buttons control the data displayed on the screen and the signal level is represented in the LED array.
+If there is only a bare ST7036-compatible screen (without additional buttons) connected to the SPI bus, `ertgateway`
+can be configured to cycle through all available data automatically.
+
+== Hardware requirements
+
+The minimum hardware requirements for running `ertgateway` are:
+
+* A Raspberry Pi model A+, B+, Zero, 2B or 3B (any model with 40-pin GPIO connector)
+** Other single-board computers can be used by implementing support for accessing GPIO pins and
+   registering GPIO interrupts.
+* A Semtech SX127x / HopeRF RFM9xW LoRa transceiver connected to Raspberry Pi SPI port.
+** Additionally LoRa chip DIO0 and DIO5 interrupts need to be exposed through Raspberry Pi GPIO pins.
+** For example: link:https://store.uputronics.com/index.php?route=product/product&path=61&product_id=68[Raspberry Pi+ LoRa(TM) Expansion Board]  from Uputronics
+* *Optional:* A GPS receiver supported by `gpsd` -- any receiver outputting NMEA format data through serial port should work.
+** Tracking of gateway location and the distance between the node and the gateway will naturally work only if using a GPS receiver
+** For exmaple: link:https://www.modmypi.com/raspberry-pi/breakout-boards/hab-supplies/raspberry-pi-gps-hat/[Raspberry Pi GPS HAT] from ModMyPi
+
+== Installation
+
+=== Installing dependencies
+
+Install library dependencies:
+
+[source,bash]
+----
+apt-get install ntp gpsd libgps21 libgps-dev libyaml-0-2 libyaml-dev
+----
+
+=== Configuring Raspberry Pi
+
+Enable peripheral interfaces in Raspberry Pi by adding the following to `/boot/config.txt`:
+
+[source]
+----
+# Enable I2C
+dtparam=i2c_arm=on
+
+# Enable SPI
+dtparam=spi=on
+
+# Enable serial port UART for GPS (only if GPS is used)
+enable_uart=1
+
+# Enable use of PPS time signal through GPIO (if exposed by GPS receiver)
+dtoverlay=pps-gpio,gpiopin=4
+----
+
+=== Configuring GPSd and NTP (optional: only if GPS is installed)
+
+Configure GPSd to use Raspberry Pi internal serial port (assuming GPS is connected to it).
+*Replace the contents* of file `/etc/default/gpsd` with the following configuration:
+
+[source]
+----
+# Default settings for the gpsd init script and the hotplug wrapper.
+
+# Start the gpsd daemon automatically at boot time
+START_DAEMON="true"
+
+# Use USB hotplugging to add new USB devices automatically to the daemon
+USBAUTO="true"
+
+# Devices gpsd should collect to at boot time.
+# They need to be read/writeable, either by user gpsd or the group dialout.
+DEVICES="/dev/ttyAMA0"
+
+# Other options you want to pass to gpsd
+GPSD_OPTIONS="-n"
+----
+
+The time data and signals from a GPS receiver can be used to feed the NTP daemon,
+so that Raspberry Pi can keep correct time as long as it has GPS lock.
+
+Some GPS receivers expose PPS signal, which can be fed to Raspberry Pi GPIO for extra accuracy.
+There is more information about using PPS signal on link:http://www.satsignal.eu/ntp/Raspberry-Pi-NTP.html[these]
+link:https://github.com/flok99/rpi_gpio_ntpd[sites].
+To use the PPS signal, an additional utility needs to be installed:
+
+[source,bash]
+----
+git clone https://github.com/flok99/rpi_gpio_ntpd.git
+cd rpi_gpio_ntpd
+make
+sudo make install
+----
+
+Run the utility at boot time by adding the following to `/etc/rc.local`:
+
+[source,bash]
+----
+# Use GPIO18 (pin 12) for GPS PPS signal
+/usr/local/bin/rpi_gpio_ntp -N 1 -g 18
+----
+
+Add the following configuration to `/etc/ntp.conf`:
+
+[source]
+----
+# GPS Serial data reference
+server 127.127.28.0 minpoll 4 maxpoll 4
+fudge 127.127.28.0 time1 0.0 refid GPS
+
+# GPS PPS reference
+server 127.127.28.1 minpoll 4 maxpoll 4 prefer
+fudge 127.127.28.1 refid PPS
+{{< /sourcecode >}}
+----
+
+Enable GPSd and NTP daemon by executing:
+
+[source,bash]
+----
+systemctl enable gpsd
+systemctl start gpsd
+
+systemctl enable ntp
+systemctl start ntp
+----
+
+Reboot Raspberry Pi to make all config changes take effect.
+
+=== Building `ertgateway`
+
+Check out source code and build it:
+
+[source,bash]
+----
+git clone https://github.com/mikaelnousiainen/ert.git
+mkdir -p build/ertgateway
+cd build/ertgateway
+cmake ../../ert/ertgateway
+make
+----
+
+=== Configuring `ertgateway`
+
+Configure the application by editing `ertgateway.yaml` in the `build/ertnode` directory.
+
+=== Running `ertgateway`
+
+Run `ertgateway`: (uses `sudo` with root privileges, which are needed for GPIO access)
+[source,bash]
+----
+./ertgateway-start-dev.sh # Run on foreground
+
+./ertgateway-start.sh # Run as a background daemon
+----
