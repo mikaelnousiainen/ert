@@ -17,7 +17,7 @@ The project consists of two applications:
 
 So, simply put...
 
-image::doc/ert-overview.svg[Embedded Radio Tracker overview, title="Embedded Radio Tracker overview"]
+image::doc/ert-overview.png[Embedded Radio Tracker overview, title="Embedded Radio Tracker overview"]
 
 === ertnode
 
