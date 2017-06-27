@@ -52,7 +52,8 @@ set(libert_HEADERS ert.h ert-common.h ert-time.h ert-mapper.h ert-mapper-json.h 
     ert-hal-serial.h ert-hal-serial-posix.h
     ert-driver-gsm-modem.h ert-driver-gsm-modem-config.h ert-color.h
     geodesic.c ert-geo.h
-    ert-image-metadata.h ert-msgpack-helpers.h ert-comm-protocol-json.h)
+    ert-image-metadata.h ert-msgpack-helpers.h ert-comm-protocol-json.h
+    ert-gps-ublox.h)
 
 set(libert_SOURCES ert.c ert-time.c ert-mapper.c ert-mapper-json.c ert-yaml.c ert-event-emitter.c
     ert-hal.c ert-hal-spi.c ert-hal-spi-linux.c
@@ -69,7 +70,8 @@ set(libert_SOURCES ert.c ert-time.c ert-mapper.c ert-mapper-json.c ert-yaml.c er
     ert-hal-serial.c ert-hal-serial-posix.c
     ert-driver-gsm-modem.c ert-driver-gsm-modem-config.c ert-color.c
     geodesic.c ert-geo.c
-    ert-image-metadata.c ert-msgpack-helpers.c ert-comm-protocol-json.c)
+    ert-image-metadata.c ert-msgpack-helpers.c ert-comm-protocol-json.c
+    ert-gps-ublox.c)
 
 set(libert_LIBS rt pthread yaml zlog jansson msgpackc libwiringPi)
 

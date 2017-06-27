@@ -186,11 +186,31 @@ ert_mapper_entry *ert_node_gps_create_mappings(ert_node_gps_config *gps_config)
       },
   };
 
+  ert_mapper_entry gps_serial_device_children[] = {
+      {
+          .name = "file",
+          .type = ERT_MAPPER_ENTRY_TYPE_STRING,
+          .value = &gps_config->serial_device_file,
+          .maximum_length = 256,
+      },
+      {
+          .name = "speed",
+          .type = ERT_MAPPER_ENTRY_TYPE_UINT32,
+          .value = &gps_config->serial_device_speed,
+          .maximum_length = 256,
+      },
+  };
+
   ert_mapper_entry gps_children[] = {
       {
           .name = "gpsd",
           .type = ERT_MAPPER_ENTRY_TYPE_MAPPING,
           .children = gps_gpsd_children,
+      },
+      {
+          .name = "serial_device",
+          .type = ERT_MAPPER_ENTRY_TYPE_MAPPING,
+          .children = gps_serial_device_children,
       },
       {
           .type = ERT_MAPPER_ENTRY_TYPE_NONE,

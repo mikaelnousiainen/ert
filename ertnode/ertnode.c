@@ -26,6 +26,7 @@
 #include "ertnode-sender-image-comm.h"
 #include "ertnode-sender-telemetry-comm.h"
 #include "ertnode-sender-telemetry-gsm.h"
+#include "ert-gps-ublox.h"
 
 #include "ert-data-logger-serializer-jansson.h"
 #include "ert-data-logger-writer-zlog.h"
@@ -266,6 +267,7 @@ static int comm_transceiver_send_test_messages(ert_comm_transceiver *comm_transc
 static struct option ert_node_long_options[] = {
     {"config-file", required_argument, NULL, 'c' },
     {"log-config-file", required_argument, NULL, 'l' },
+    {"gps-config",  no_argument, NULL, 'g' },
     {"init-only",  no_argument, NULL, 'i' },
     {"help",  no_argument, NULL, 'h' },
     {NULL, 0, NULL, 0 }
@@ -283,7 +285,7 @@ void ert_node_display_usage(struct option *options)
 }
 
 int ert_node_process_options(int argc, char **argv,
-    char *custom_config_file_name, char *custom_log_config_file_name, bool *init_only)
+    char *custom_config_file_name, char *custom_log_config_file_name, bool *init_only, bool *gps_config)
 {
   int c;
 
@@ -308,6 +310,9 @@ int ert_node_process_options(int argc, char **argv,
         break;
       case 'i':
         *init_only = true;
+        break;
+      case 'g':
+        *gps_config = true;
         break;
       case 'h':
         ert_node_display_usage(ert_node_long_options);
@@ -547,13 +552,14 @@ int main(int argc, char *argv[])
   char config_file_name[PATH_MAX];
   char log_config_file_name[PATH_MAX];
   bool init_only = false;
+  bool gps_config = false;
 
   config_file_name[0] = '\0';
   log_config_file_name[0] = '\0';
 
   ert_process_register_backtrace_handler();
 
-  result = ert_node_process_options(argc, argv, config_file_name, log_config_file_name, &init_only);
+  result = ert_node_process_options(argc, argv, config_file_name, log_config_file_name, &init_only, &gps_config);
   if (result < 0) {
     return EXIT_FAILURE;
   }
@@ -599,6 +605,25 @@ int main(int argc, char *argv[])
   result = ert_node_configure(node, config_file_name);
   if (result < 0) {
     return EXIT_FAILURE;
+  }
+
+  if (gps_config) {
+    hal_serial_device_config serial_device_config;
+    strncpy(serial_device_config.device, node->config.gps_config.serial_device_file, 256);
+    serial_device_config.speed = node->config.gps_config.serial_device_speed;
+    serial_device_config.parity = false;
+    serial_device_config.stop_bits_2 = false;
+
+    ert_log_info("Attempting to configured GPS in port %s ...", serial_device_config.device);
+
+    result = ert_gps_ublox_configure(&serial_device_config);
+    if (result < 0) {
+      return EXIT_FAILURE;
+    }
+
+    ert_log_info("GPS configured successfully");
+
+    return EXIT_SUCCESS;
   }
 
   result = ert_node_initialize(node);

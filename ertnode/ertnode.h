@@ -65,6 +65,9 @@ typedef struct _ert_node_gps_config {
 
   char gpsd_host[256];
   uint32_t gpsd_port;
+
+  char serial_device_file[256];
+  uint32_t serial_device_speed;
 } ert_node_gps_config;
 
 typedef struct _ert_node_config {

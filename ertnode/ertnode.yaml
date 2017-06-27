@@ -7,6 +7,9 @@ gps:
     enabled: true
     host: "localhost"
     port: 2947
+  serial_device:
+    file: "/dev/ttyAMA0"
+    speed: 9600
 
 telemetry_sender:
   enabled: true

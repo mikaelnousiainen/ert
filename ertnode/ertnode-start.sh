@@ -11,6 +11,13 @@ mkdir -p "${ERT_LOG_PATH}"
 
 "${SCRIPT_PATH}/ertnode-prepare-raspbian.sh"
 
+systemctl gpsd stop
+
+# Initialize GPS
+"${SCRIPT_PATH}/ertnode" -g
+
+systemctl gpsd start
+
 # Run one cycle of hardware initialization to have it in a sane state
 "${SCRIPT_PATH}/ertnode" -i
 
