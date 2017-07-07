@@ -120,11 +120,11 @@ int ert_gps_gpsd_receive(ert_gps *gps, ert_gps_data *data, int timeout_millis)
   data->altitude_meters = driver->gps_data.fix.altitude;
   data->altitude_uncertainty_meters = driver->gps_data.fix.epv;
 
-  data->track = driver->gps_data.fix.track;
+  data->track_degrees = driver->gps_data.fix.track;
   data->track_uncertainty_degrees = driver->gps_data.fix.epd;
   data->speed_meters_per_sec = driver->gps_data.fix.speed;
   data->speed_uncertainty_meters_per_sec = driver->gps_data.fix.eps;
-  data->climb_meters_per_sec = driver->gps_data.fix.speed;
+  data->climb_meters_per_sec = driver->gps_data.fix.climb;
   data->climb_uncertainty_meters_per_sec = driver->gps_data.fix.epc;
 
   return 0;

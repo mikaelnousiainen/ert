@@ -16,12 +16,7 @@
 #include "ert-log.h"
 #include "ert-time.h"
 #include "ert-data-logger-serializer-jansson.h"
-
-#define jansson_check_result(x) \
-  if ((x) < 0) { \
-    ert_log_error("JSON serialization failed"); \
-    return -EIO; \
-  }
+#include "ert-jansson-helpers.h"
 
 static const char *gps_data_mode_label[] = {
   "UNKNOWN", "NO_FIX", "2D", "3D"
@@ -54,14 +49,7 @@ static int serialize_entry_root(ert_data_logger_entry *entry, json_t *entry_obj)
   jansson_check_result(json_object_set_new(entry_obj, "type", json_integer(entry->entry_type)));
   jansson_check_result(json_object_set_new(entry_obj, "id", json_integer(entry->entry_id)));
 
-  int64_t timestamp_millis =
-      (int64_t) (((int64_t) entry->timestamp.tv_sec) * 1000LL
-                 + (((int64_t) entry->timestamp.tv_nsec) / 1000000LL));
-  jansson_check_result(json_object_set_new(entry_obj, "timestamp_millis", json_integer(timestamp_millis)));
-
-  uint8_t timestamp_string[64];
-  ert_format_iso8601_timestamp(&entry->timestamp, 64, timestamp_string);
-  jansson_check_result(json_object_set_new(entry_obj, "timestamp", json_string(timestamp_string)));
+  jansson_check_result(ert_jansson_serialize_timestamp_iso8601_and_millis(entry_obj, "timestamp", &entry->timestamp));
 
   jansson_check_result(json_object_set_new(entry_obj, "device_name", serialize_string(entry->device_name)));
   jansson_check_result(json_object_set_new(entry_obj, "device_model", serialize_string(entry->device_model)));
@@ -77,15 +65,10 @@ static int serialize_gps_data(ert_gps_data *gps_data, json_t *gps_obj)
   jansson_check_result(json_object_set_new(gps_obj, "satellites_used", json_integer(gps_data->satellites_used)));
   jansson_check_result(json_object_set_new(gps_obj, "skyview_time_seconds", serialize_json_real(gps_data->skyview_time_seconds)));
 
-  double gps_time_seconds = gps_data->time_seconds;
-  uint8_t gps_timestamp_string[64];
-  struct timespec gps_timespec = {
-      .tv_sec = (__time_t) gps_time_seconds,
-      .tv_nsec = (uint32_t) ((gps_time_seconds - (uint64_t) gps_time_seconds) * (double) 1000000000)
-  };
-  ert_format_iso8601_timestamp(&gps_timespec, 64, gps_timestamp_string);
+  struct timespec gps_timespec;
+  ert_gps_time_seconds_to_timespec(gps_data->time_seconds, &gps_timespec);
 
-  jansson_check_result(json_object_set_new(gps_obj, "time", json_string(gps_timestamp_string)));
+  jansson_check_result(ert_jansson_serialize_timestamp_iso8601(gps_obj, "time", &gps_timespec));
   jansson_check_result(json_object_set_new(gps_obj, "time_seconds", serialize_json_real(gps_data->time_seconds)));
   jansson_check_result(json_object_set_new(gps_obj, "time_uncertainty_seconds", serialize_json_real(gps_data->time_uncertainty_seconds)));
 
@@ -96,7 +79,7 @@ static int serialize_gps_data(ert_gps_data *gps_data, json_t *gps_obj)
   jansson_check_result(json_object_set_new(gps_obj, "altitude_meters", serialize_json_real(gps_data->altitude_meters)));
   jansson_check_result(json_object_set_new(gps_obj, "altitude_uncertainty_meters", serialize_json_real(gps_data->altitude_uncertainty_meters)));
 
-  jansson_check_result(json_object_set_new(gps_obj, "track", serialize_json_real(gps_data->track)));
+  jansson_check_result(json_object_set_new(gps_obj, "track_degrees", serialize_json_real(gps_data->track_degrees)));
   jansson_check_result(json_object_set_new(gps_obj, "track_uncertainty_degrees", serialize_json_real(gps_data->track_uncertainty_degrees)));
 
   jansson_check_result(json_object_set_new(gps_obj, "speed_meters_per_sec", serialize_json_real(gps_data->speed_meters_per_sec)));
@@ -108,10 +91,42 @@ static int serialize_gps_data(ert_gps_data *gps_data, json_t *gps_obj)
   return 0;
 }
 
+static char *serialize_flight_data_state(ert_flight_state state)
+{
+  switch (state) {
+    case ERT_FLIGHT_STATE_IDLE:
+      return "IDLE";
+    case ERT_FLIGHT_STATE_LAUNCHED:
+      return "LAUNCHED";
+    case ERT_FLIGHT_STATE_ASCENDING:
+      return "ASCENDING";
+    case ERT_FLIGHT_STATE_FLOATING:
+      return "FLOATING";
+    case ERT_FLIGHT_STATE_BURST:
+      return "BURST";
+    case ERT_FLIGHT_STATE_DESCENDING:
+      return "DESCENDING";
+    case ERT_FLIGHT_STATE_LANDED:
+      return "LANDED";
+    case ERT_FLIGHT_STATE_UNKNOWN:
+    default:
+      return "UNKNOWN";
+  }
+}
+
+static int serialize_flight_data(ert_flight_data *flight_data, json_t *gps_obj)
+{
+  jansson_check_result(json_object_set_new(gps_obj, "flight_state", json_string(serialize_flight_data_state(flight_data->flight_state))));
+
+  jansson_check_result(json_object_set_new(gps_obj, "minimum_altitude_meters", serialize_json_real(flight_data->minimum_altitude_meters)));
+  jansson_check_result(json_object_set_new(gps_obj, "maximum_altitude_meters", serialize_json_real(flight_data->maximum_altitude_meters)));
+  jansson_check_result(json_object_set_new(gps_obj, "climb_rate_meters_per_sec", serialize_json_real(flight_data->climb_rate_meters_per_sec)));
+
+  return 0;
+}
+
 static int serialize_comm_device_status(ert_comm_device_status *status, json_t *comm_device_obj)
 {
-  uint8_t timestamp_string[64];
-
   jansson_check_result(json_object_set_new(comm_device_obj, "name", serialize_string(status->name)));
   jansson_check_result(json_object_set_new(comm_device_obj, "model", serialize_string(status->model)));
   jansson_check_result(json_object_set_new(comm_device_obj, "manufacturer", serialize_string(status->manufacturer)));
@@ -120,29 +135,14 @@ static int serialize_comm_device_status(ert_comm_device_status *status, json_t *
 
   jansson_check_result(json_object_set_new(comm_device_obj, "transmitted_packet_count", json_integer(status->transmitted_packet_count)));
   jansson_check_result(json_object_set_new(comm_device_obj, "transmitted_bytes", json_integer(status->transmitted_bytes)));
-  if (ert_timespec_is_nonzero(&status->last_transmitted_packet_timestamp)) {
-    ert_format_iso8601_timestamp(&status->last_transmitted_packet_timestamp, 64, timestamp_string);
-    jansson_check_result(json_object_set_new(comm_device_obj, "last_transmitted_packet_timestamp", json_string(timestamp_string)));
-  } else {
-    jansson_check_result(json_object_set_new(comm_device_obj, "last_transmitted_packet_timestamp", json_null()));
-  }
+  jansson_check_result(ert_jansson_serialize_timestamp_iso8601(comm_device_obj, "last_transmitted_packet_timestamp", &status->last_transmitted_packet_timestamp));
 
   jansson_check_result(json_object_set_new(comm_device_obj, "received_packet_count", json_integer(status->received_packet_count)));
   jansson_check_result(json_object_set_new(comm_device_obj, "received_bytes", json_integer(status->received_bytes)));
-  if (ert_timespec_is_nonzero(&status->last_received_packet_timestamp)) {
-    ert_format_iso8601_timestamp(&status->last_received_packet_timestamp, 64, timestamp_string);
-    jansson_check_result(json_object_set_new(comm_device_obj, "last_received_packet_timestamp", json_string(timestamp_string)));
-  } else {
-    jansson_check_result(json_object_set_new(comm_device_obj, "last_received_packet_timestamp", json_null()));
-  }
+  jansson_check_result(ert_jansson_serialize_timestamp_iso8601(comm_device_obj, "last_received_packet_timestamp", &status->last_received_packet_timestamp));
 
   jansson_check_result(json_object_set_new(comm_device_obj, "invalid_received_packet_count", json_integer(status->invalid_received_packet_count)));
-  if (ert_timespec_is_nonzero(&status->last_invalid_received_packet_timestamp)) {
-    ert_format_iso8601_timestamp(&status->last_invalid_received_packet_timestamp, 64, timestamp_string);
-    jansson_check_result(json_object_set_new(comm_device_obj, "last_invalid_received_packet_timestamp", json_string(timestamp_string)));
-  } else {
-    jansson_check_result(json_object_set_new(comm_device_obj, "last_invalid_received_packet_timestamp", json_null()));
-  }
+  jansson_check_result(ert_jansson_serialize_timestamp_iso8601(comm_device_obj, "last_invalid_received_packet_timestamp", &status->last_invalid_received_packet_timestamp));
 
   jansson_check_result(json_object_set_new(comm_device_obj, "frequency", serialize_json_real(status->frequency)));
   jansson_check_result(json_object_set_new(comm_device_obj, "frequency_error", serialize_json_real(status->frequency_error)));
@@ -152,49 +152,27 @@ static int serialize_comm_device_status(ert_comm_device_status *status, json_t *
 
 static int serialize_comm_protocol_status(ert_comm_protocol_status *status, json_t *comm_protocol_obj)
 {
-  uint8_t timestamp_string[64];
-
   jansson_check_result(json_object_set_new(comm_protocol_obj, "transmitted_packet_count", json_integer(status->transmitted_packet_count)));
   jansson_check_result(json_object_set_new(comm_protocol_obj, "transmitted_data_bytes", json_integer(status->transmitted_data_bytes)));
   jansson_check_result(json_object_set_new(comm_protocol_obj, "transmitted_payload_data_bytes", json_integer(status->transmitted_payload_data_bytes)));
-  if (ert_timespec_is_nonzero(&status->last_transmitted_packet_timestamp)) {
-    ert_format_iso8601_timestamp(&status->last_transmitted_packet_timestamp, 64, timestamp_string);
-    jansson_check_result(json_object_set_new(comm_protocol_obj, "last_transmitted_packet_timestamp", json_string(timestamp_string)));
-  } else {
-    jansson_check_result(json_object_set_new(comm_protocol_obj, "last_transmitted_packet_timestamp", json_null()));
-  }
+  jansson_check_result(ert_jansson_serialize_timestamp_iso8601(comm_protocol_obj, "last_transmitted_packet_timestamp", &status->last_transmitted_packet_timestamp));
 
   jansson_check_result(json_object_set_new(comm_protocol_obj, "duplicate_transmitted_packet_count", json_integer(status->duplicate_transmitted_packet_count)));
 
   jansson_check_result(json_object_set_new(comm_protocol_obj, "retransmitted_packet_count", json_integer(status->retransmitted_packet_count)));
   jansson_check_result(json_object_set_new(comm_protocol_obj, "retransmitted_data_bytes", json_integer(status->retransmitted_data_bytes)));
   jansson_check_result(json_object_set_new(comm_protocol_obj, "retransmitted_payload_data_bytes", json_integer(status->retransmitted_payload_data_bytes)));
-  if (ert_timespec_is_nonzero(&status->last_retransmitted_packet_timestamp)) {
-    ert_format_iso8601_timestamp(&status->last_retransmitted_packet_timestamp, 64, timestamp_string);
-    jansson_check_result(json_object_set_new(comm_protocol_obj, "last_retransmitted_packet_timestamp", json_string(timestamp_string)));
-  } else {
-    jansson_check_result(json_object_set_new(comm_protocol_obj, "last_retransmitted_packet_timestamp", json_null()));
-  }
+  jansson_check_result(ert_jansson_serialize_timestamp_iso8601(comm_protocol_obj, "last_retransmitted_packet_timestamp", &status->last_retransmitted_packet_timestamp));
 
   jansson_check_result(json_object_set_new(comm_protocol_obj, "received_packet_count", json_integer(status->received_packet_count)));
   jansson_check_result(json_object_set_new(comm_protocol_obj, "received_data_bytes", json_integer(status->received_data_bytes)));
   jansson_check_result(json_object_set_new(comm_protocol_obj, "received_payload_data_bytes", json_integer(status->received_payload_data_bytes)));
-  if (ert_timespec_is_nonzero(&status->last_received_packet_timestamp)) {
-    ert_format_iso8601_timestamp(&status->last_received_packet_timestamp, 64, timestamp_string);
-    jansson_check_result(json_object_set_new(comm_protocol_obj, "last_received_packet_timestamp", json_string(timestamp_string)));
-  } else {
-    jansson_check_result(json_object_set_new(comm_protocol_obj, "last_received_packet_timestamp", json_null()));
-  }
+  jansson_check_result(ert_jansson_serialize_timestamp_iso8601(comm_protocol_obj, "last_received_packet_timestamp", &status->last_received_packet_timestamp));
 
   jansson_check_result(json_object_set_new(comm_protocol_obj, "duplicate_received_packet_count", json_integer(status->duplicate_received_packet_count)));
   jansson_check_result(json_object_set_new(comm_protocol_obj, "received_packet_sequence_number_error_count", json_integer(status->received_packet_sequence_number_error_count)));
   jansson_check_result(json_object_set_new(comm_protocol_obj, "invalid_received_packet_count", json_integer(status->invalid_received_packet_count)));
-  if (ert_timespec_is_nonzero(&status->last_invalid_received_packet_timestamp)) {
-    ert_format_iso8601_timestamp(&status->last_invalid_received_packet_timestamp, 64, timestamp_string);
-    jansson_check_result(json_object_set_new(comm_protocol_obj, "last_invalid_received_packet_timestamp", json_string(timestamp_string)));
-  } else {
-    jansson_check_result(json_object_set_new(comm_protocol_obj, "last_invalid_received_packet_timestamp", json_null()));
-  }
+  jansson_check_result(ert_jansson_serialize_timestamp_iso8601(comm_protocol_obj, "last_invalid_received_packet_timestamp", &status->last_invalid_received_packet_timestamp));
 
   return 0;
 }
@@ -352,6 +330,18 @@ static int serialize_entry(ert_data_logger_entry *entry, json_t *entry_obj)
     }
 
     jansson_check_result(json_object_set_new(entry_obj, "gps", gps_obj));
+  }
+
+  if (entry->params->flight_data_present) {
+    struct json_t *flight_obj = json_object();
+
+    result = serialize_flight_data(&entry->params->flight_data, flight_obj);
+    if (result < 0) {
+      ert_log_error("Error serializing flight data to JSON");
+      return result;
+    }
+
+    jansson_check_result(json_object_set_new(entry_obj, "flight", flight_obj));
   }
 
   struct json_t *comm_devices_array = json_array();

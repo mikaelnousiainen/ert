@@ -119,7 +119,7 @@ static int serialize_gps_data(msgpack_packer *pk, ert_gps_data *gps_data)
   msgpack_pack_float(pk, (float) gps_data->altitude_uncertainty_meters);
 
   ert_msgpack_serialize_map_key(pk, "tr");
-  msgpack_pack_float(pk, (float) gps_data->track);
+  msgpack_pack_float(pk, (float) gps_data->track_degrees);
   ert_msgpack_serialize_map_key(pk, "tru");
   msgpack_pack_float(pk, (float) gps_data->track_uncertainty_degrees);
 
@@ -132,6 +132,23 @@ static int serialize_gps_data(msgpack_packer *pk, ert_gps_data *gps_data)
   msgpack_pack_float(pk, (float) gps_data->climb_meters_per_sec);
   ert_msgpack_serialize_map_key(pk, "cu");
   msgpack_pack_float(pk, (float) gps_data->climb_uncertainty_meters_per_sec);
+
+  return 0;
+}
+
+static int serialize_flight_data(msgpack_packer *pk, ert_flight_data *flight_data) {
+  msgpack_pack_map(pk, 4);
+
+  ert_msgpack_serialize_map_key(pk, "s");
+  msgpack_pack_uint8(pk, flight_data->flight_state);
+
+  ert_msgpack_serialize_map_key(pk, "a1");
+  msgpack_pack_float(pk, (float) flight_data->minimum_altitude_meters);
+  ert_msgpack_serialize_map_key(pk, "a2");
+  msgpack_pack_float(pk, (float) flight_data->maximum_altitude_meters);
+
+  ert_msgpack_serialize_map_key(pk, "c");
+  msgpack_pack_float(pk, (float) flight_data->climb_rate_meters_per_sec);
 
   return 0;
 }
@@ -271,6 +288,7 @@ int ert_data_logger_serializer_msgpack_serialize_with_settings(ert_data_logger_s
   bool include_comm = settings->include_comm;
   bool include_modem = settings->include_modem && entry->params->gsm_modem_status_present;
   bool include_gps = entry->params->gps_data_present;
+  bool include_flight_data = entry->params->flight_data_present;
 
   if (include_comm) {
     entry_field_count++;
@@ -280,6 +298,9 @@ int ert_data_logger_serializer_msgpack_serialize_with_settings(ert_data_logger_s
   }
   if (include_gps) {
     entry_field_count++;
+    if (include_flight_data) {
+      entry_field_count++;
+    }
   }
 
   msgpack_pack_map(&pk, entry_field_count);
@@ -297,6 +318,15 @@ int ert_data_logger_serializer_msgpack_serialize_with_settings(ert_data_logger_s
     if (result < 0) {
       ert_log_error("Error serializing GPS data, result %d", result);
       return result;
+    }
+
+    if (include_flight_data) {
+      ert_msgpack_serialize_map_key(&pk, "f");
+      result = serialize_flight_data(&pk, &entry->params->flight_data);
+      if (result < 0) {
+        ert_log_error("Error serializing flight data, result %d", result);
+        return result;
+      }
     }
   }
 
@@ -561,7 +591,7 @@ static int deserialize_gps_data(ert_gps_data *gps_data, msgpack_object *obj)
         return -1;
       }
 
-      gps_data->track = kv_obj->val.via.f64;
+      gps_data->track_degrees = kv_obj->val.via.f64;
     }
 
     if (ert_msgpack_string_equals("tru", &kv_obj->key.via.str)) {
@@ -607,6 +637,58 @@ static int deserialize_gps_data(ert_gps_data *gps_data, msgpack_object *obj)
       }
 
       gps_data->climb_uncertainty_meters_per_sec = kv_obj->val.via.f64;
+    }
+  }
+
+  return 0;
+}
+
+static int deserialize_flight_data(ert_flight_data *flight_data, msgpack_object *obj)
+{
+  if (obj->type != MSGPACK_OBJECT_MAP) {
+    ert_log_error("Data logger entry: flight data data object is not a map");
+    return -1;
+  }
+
+  msgpack_object_map *map_obj = &obj->via.map;
+
+  for (uint32_t i = 0; i < map_obj->size; i++) {
+    msgpack_object_kv *kv_obj = &map_obj->ptr[i];
+
+    if (ert_msgpack_string_equals("s", &kv_obj->key.via.str)) {
+      if (kv_obj->val.type != MSGPACK_OBJECT_POSITIVE_INTEGER) {
+        ert_log_error("Data logger entry 'f.s' object is not an integer");
+        return -1;
+      }
+
+      flight_data->flight_state = (ert_flight_state) kv_obj->val.via.u64;
+    }
+
+    if (ert_msgpack_string_equals("a1", &kv_obj->key.via.str)) {
+      if (kv_obj->val.type != MSGPACK_OBJECT_FLOAT32) {
+        ert_log_error("Data logger entry 'f.a1' object is not a float");
+        return -1;
+      }
+
+      flight_data->minimum_altitude_meters = kv_obj->val.via.f64;
+    }
+
+    if (ert_msgpack_string_equals("a2", &kv_obj->key.via.str)) {
+      if (kv_obj->val.type != MSGPACK_OBJECT_FLOAT32) {
+        ert_log_error("Data logger entry 'f.a2' object is not a float");
+        return -1;
+      }
+
+      flight_data->maximum_altitude_meters = kv_obj->val.via.f64;
+    }
+
+    if (ert_msgpack_string_equals("c", &kv_obj->key.via.str)) {
+      if (kv_obj->val.type != MSGPACK_OBJECT_FLOAT32) {
+        ert_log_error("Data logger entry 'f.c' object is not a float");
+        return -1;
+      }
+
+      flight_data->climb_rate_meters_per_sec = kv_obj->val.via.f64;
     }
   }
 
@@ -1011,6 +1093,15 @@ int ert_data_logger_serializer_msgpack_deserialize(ert_data_logger_serializer *s
         goto error_entry;
       }
       entry->params->gps_data_present = true;
+    }
+
+    if (ert_msgpack_string_equals("f", &kv_obj->key.via.str)) {
+      result = deserialize_flight_data(&entry->params->flight_data, &kv_obj->val);
+      if (result < 0) {
+        ert_log_error("Error deserializing flight data, result %d", result);
+        goto error_entry;
+      }
+      entry->params->flight_data_present = true;
     }
 
     if (ert_msgpack_string_equals("m", &kv_obj->key.via.str)) {

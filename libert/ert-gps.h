@@ -41,7 +41,7 @@ typedef struct _ert_gps_data {
   double altitude_meters;
   double altitude_uncertainty_meters;
 
-  double track;
+  double track_degrees;
   double track_uncertainty_degrees;
 
   double speed_meters_per_sec;
@@ -50,5 +50,7 @@ typedef struct _ert_gps_data {
   double climb_meters_per_sec;
   double climb_uncertainty_meters_per_sec;
 } ert_gps_data;
+
+void ert_gps_time_seconds_to_timespec(double time_seconds, struct timespec *ts);
 
 #endif

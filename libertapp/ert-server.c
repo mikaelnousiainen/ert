@@ -25,6 +25,7 @@
 #include "ert-mapper-json.h"
 #include "ert-comm-protocol-json.h"
 #include "ertapp-common.h"
+#include "ert-server-status.h"
 
 #define ERT_SERVER_SESSIONS_COUNT 64
 
@@ -44,6 +45,7 @@ const char *path_data_logger_history_node = "/api/data-logger/history/node";
 const char *path_data_logger_history_gateway = "/api/data-logger/history/gateway";
 const char *path_image_history = "/api/image-history";
 const char *path_image_api_prefix = "/api/image/";
+const char *path_status = "/api/status";
 const char *path_config = "/api/config";
 const char *path_comm_protocol_active_streams = "/api/comm-protocol/active-streams";
 
@@ -65,6 +67,8 @@ struct _ert_server {
   ert_server_session *sessions[ERT_SERVER_SESSIONS_COUNT];
 
   ert_server_config *config;
+
+  ert_server_status server_status;
 };
 
 static ssize_t index_of(char *string, char c)
@@ -192,6 +196,24 @@ static int serve_image_history(struct lws *wsi, ert_server_session *session)
   return result;
 }
 
+static int serve_status(struct lws *wsi, ert_server *server, ert_server_session *session)
+{
+  uint32_t data_length;
+  uint8_t *data;
+
+  int result = ert_server_status_json_serialize(&server->server_status, &data_length, &data);
+  if (result < 0) {
+    ert_log_error("Error serializing server status to JSON string");
+    return lws_return_http_status(wsi, HTTP_STATUS_INTERNAL_SERVER_ERROR, NULL);
+  }
+
+  result = http_send_data_init(session, wsi, content_type_application_json, data_length, data);
+
+  free(data);
+
+  return result;
+}
+
 static int serve_config(struct lws *wsi, ert_server *server, ert_server_session *session)
 {
   ert_mapper_entry *root_entry = server->config->app_config_root_entry;
@@ -302,6 +324,8 @@ static int callback_http(struct lws *wsi, enum lws_callback_reasons reason,
         return serve_data_logger_history(wsi, session, server->config->data_logger_node_filename_template);
       } else if (strcmp(requested_uri, path_data_logger_history_gateway) == 0) {
         return serve_data_logger_history(wsi, session, server->config->data_logger_gateway_filename_template);
+      } else if (strcmp(requested_uri, path_status) == 0) {
+        return serve_status(wsi, server, session);
       } else if (strcmp(requested_uri, path_config) == 0) {
         if (lws_hdr_total_length(wsi, WSI_TOKEN_POST_URI)) {
           return http_receive_body_data_init(session, wsi,
@@ -827,6 +851,26 @@ int ert_server_update_node_image(ert_server *server, ert_image_metadata *metadat
   free(data);
 
   return 0;
+}
+
+int ert_server_update_data_logger_entry_transmitted(ert_server *server, ert_data_logger_entry *entry)
+{
+  return ert_server_status_update_last_transmitted_telemetry(entry, &server->server_status);
+}
+
+int ert_server_update_data_logger_entry_received(ert_server *server, ert_data_logger_entry *entry)
+{
+  return ert_server_status_update_last_received_telemetry(entry, &server->server_status);
+}
+
+int ert_server_record_data_logger_entry_transmission_failure(ert_server *server)
+{
+  return ert_server_status_record_telemetry_transmission_failure(&server->server_status);
+}
+
+int ert_server_record_data_logger_entry_reception_failure(ert_server *server)
+{
+  return ert_server_status_record_telemetry_reception_failure(&server->server_status);
 }
 
 int ert_server_start(ert_server *server)

@@ -32,6 +32,12 @@ int ert_data_logger_create(const char *device_name, const char *device_model,
   data_logger->serializer = serializer;
   data_logger->writer = writer;
 
+  int result = ert_flight_manager_create(&data_logger->flight_manager);
+  if (result < 0) {
+    free(data_logger);
+    return result;
+  }
+
   *data_logger_rcv = data_logger;
 
   return 0;
@@ -155,12 +161,17 @@ int ert_data_logger_collect_entry_params_with_gps(ert_data_logger *data_logger,
   int result;
 
   params->gps_data_present = false;
+  params->flight_data_present = false;
   if (gps_listener != NULL) {
     result = ert_gps_get_current_data(gps_listener, &params->gps_data);
     if (result < 0) {
       return result;
     }
     params->gps_data_present = true;
+
+    ert_flight_manager_process(data_logger->flight_manager, &params->gps_data);
+    ert_flight_manager_get_flight_data(data_logger->flight_manager, &params->flight_data);
+    params->flight_data_present = true;
   }
 
   result = ert_data_logger_collect_entry_params(data_logger, comm_transceiver, comm_protocol, gsm_modem, params);
@@ -189,6 +200,7 @@ int ert_data_logger_uninit_entry_params(ert_data_logger *data_logger,
 
 int ert_data_logger_destroy(ert_data_logger *data_logger)
 {
+  ert_flight_manager_destroy(data_logger->flight_manager);
   free(data_logger);
   return 0;
 }

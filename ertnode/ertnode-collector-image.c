@@ -17,10 +17,40 @@
 #include "ertnode-image.h"
 #include "ertnode-collector-image.h"
 
+typedef struct _ert_node_image_collector_context {
+  ert_node *node;
+
+  pthread_mutex_t current_data_mutex;
+  volatile bool current_data_valid;
+  ert_gps_data current_gps_data;
+} ert_node_image_collector_context;
+
+static void ert_node_image_collector_telemetry_collected_listener(char *event, void *data, void *context) {
+  ert_node_image_collector_context *image_collector_context = (ert_node_image_collector_context *) context;
+  ert_data_logger_entry *entry = (ert_data_logger_entry *) data;
+
+  pthread_mutex_lock(&image_collector_context->current_data_mutex);
+  memcpy(&image_collector_context->current_gps_data, &entry->params->gps_data, sizeof(ert_gps_data));
+  image_collector_context->current_data_valid = true;
+  pthread_mutex_unlock(&image_collector_context->current_data_mutex);
+}
+
 void *ert_node_image_collector(void *context)
 {
   ert_node *node = (ert_node *) context;
   int result;
+
+  ert_node_image_collector_context image_collector_context = {0};
+  image_collector_context.node = node;
+
+  result = pthread_mutex_init(&image_collector_context.current_data_mutex, NULL);
+  if (result != 0) {
+    ert_log_fatal("Error initializing current data mutex, result %d", result);
+    return NULL;
+  }
+
+  ert_event_emitter_add_listener(node->event_emitter, ERT_EVENT_NODE_TELEMETRY_COLLECTED,
+      ert_node_image_collector_telemetry_collected_listener, &image_collector_context);
 
   ert_log_info("Image collector thread running");
 
@@ -36,6 +66,9 @@ void *ert_node_image_collector(void *context)
   char original_image_full_path_filename[PATH_MAX];
   char transmitted_image_filename[PATH_MAX];
   char transmitted_image_full_path_filename[PATH_MAX];
+
+  ert_process_sleep_with_interrupt(
+      node->config.sender_telemetry_config.telemetry_collect_interval_seconds * 2, &node->running);
 
   while (node->running) {
     struct timespec image_timestamp;
@@ -66,12 +99,23 @@ void *ert_node_image_collector(void *context)
 
     ert_log_info("Capturing image %d ...", image_index);
 
+    ert_gps_data gps_data;
+    ert_gps_data *gps_data_pointer = NULL;
+
+    pthread_mutex_lock(&image_collector_context.current_data_mutex);
+    if (image_collector_context.current_data_valid) {
+      memcpy(&gps_data, &image_collector_context.current_gps_data, sizeof(ert_gps_data));
+      gps_data_pointer = &gps_data;
+    }
+    pthread_mutex_unlock(&image_collector_context.current_data_mutex);
+
     result = ert_node_capture_image(
         node->config.sender_image_config.raspistill_command,
         original_image_full_path_filename,
         node->config.sender_image_config.original_image_quality,
         node->config.sender_image_config.horizontal_flip,
-        node->config.sender_image_config.vertical_flip);
+        node->config.sender_image_config.vertical_flip,
+        gps_data_pointer);
     if (result < 0) {
       ert_log_error("Error capturing image, result %d", result);
       goto error;
@@ -118,7 +162,12 @@ void *ert_node_image_collector(void *context)
         node->config.sender_image_config.image_capture_interval_seconds, &node->running);
   }
 
+  ert_event_emitter_remove_listener(node->event_emitter, ERT_EVENT_NODE_TELEMETRY_COLLECTED,
+      ert_node_image_collector_telemetry_collected_listener);
+
   ert_log_info("Image collector thread stopping");
+
+  pthread_mutex_destroy(&image_collector_context.current_data_mutex);
 
   return NULL;
 }

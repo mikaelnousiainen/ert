@@ -14,7 +14,10 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-int ert_node_capture_image(const char *command, const char *image_filename, int16_t quality, bool hflip, bool vflip);
+#include "ert-gps.h"
+
+int ert_node_capture_image(const char *command, const char *image_filename,
+    int16_t quality, bool hflip, bool vflip, ert_gps_data *gps_data);
 int ert_node_resize_image(const char *command, const char *output_image_filename,
     const char *input_image_filename, int16_t width, int16_t height, int16_t quality);
 

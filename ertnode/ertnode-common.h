@@ -14,6 +14,8 @@
 #include "ertapp-common.h"
 
 #define ERT_EVENT_NODE_TELEMETRY_COLLECTED "node-telemetry-collected"
+#define ERT_EVENT_NODE_TELEMETRY_TRANSMITTED "node-telemetry-transmitted"
+#define ERT_EVENT_NODE_TELEMETRY_TRANSMISSION_FAILURE "node-telemetry-transmission-failure"
 
 #define ERT_EVENT_NODE_IMAGE_CAPTURED "node-image-captured"
 

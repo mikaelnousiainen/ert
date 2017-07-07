@@ -9,14 +9,22 @@
  */
 
 #include <stdio.h>
+#include <string.h>
 
 #include "ertnode.h"
 #include "ertnode-image.h"
+#include "ert-exif.h"
 
-int ert_node_capture_image(const char *command, const char *image_filename, int16_t quality, bool hflip, bool vflip)
+int ert_node_capture_image(const char *command, const char *image_filename,
+    int16_t quality, bool hflip, bool vflip, ert_gps_data *gps_data)
 {
-  const char *args[64];
+  size_t args_length = 128;
+  char *args_alloc[args_length];
+  size_t args_alloc_index = 0;
+  const char *args[args_length];
   size_t argument_index = 0;
+  size_t exif_argument_length = ERT_EXIF_ENTRY_TAG_LENGTH + ERT_EXIF_ENTRY_VALUE_LENGTH + 32;
+  char exif_argument[exif_argument_length];
 
   args[argument_index++] = command;
 
@@ -52,14 +60,39 @@ int ert_node_capture_image(const char *command, const char *image_filename, int1
     args[argument_index++] = quality_string;
   }
 
-  // TODO: Set EXIF data and GPS coordinates using --exif
+  if (gps_data != NULL) {
+    ert_exif_entry *exif_entries;
+    int result = ert_exif_gps_create(gps_data, &exif_entries);
+    if (result == 0) {
+      for (size_t index = 0; strlen(exif_entries[index].tag) > 0; index++) {
+        ert_exif_entry *entry = &exif_entries[index];
+        snprintf(exif_argument, exif_argument_length, "GPS.%s=%s", entry->tag, entry->value);
+
+        args[argument_index++] = "--exif";
+
+        char *argument_copy = strdup(exif_argument);
+        args[argument_index++] = argument_copy;
+        args_alloc[args_alloc_index++] = argument_copy;
+      }
+
+      free(exif_entries);
+    } else {
+      ert_log_warn("Error creating EXIF tags for image %s, result %d", image_filename, result);
+    }
+  }
 
   args[argument_index++] = "--output";
   args[argument_index++] = image_filename;
 
   args[argument_index] = NULL;
 
-  return ert_process_run_command(command, args);
+  int result = ert_process_run_command(command, args);
+
+  for (size_t index = 0; index < args_alloc_index; index++) {
+    free(args_alloc[index]);
+  }
+
+  return result;
 }
 
 int ert_node_resize_image(const char *command, const char *output_image_filename,

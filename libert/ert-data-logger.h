@@ -17,6 +17,7 @@
 #include "ert-comm-transceiver.h"
 #include "ert-comm-protocol.h"
 #include "ert-driver-gsm-modem.h"
+#include "ert-flight-manager.h"
 
 #include <time.h>
 
@@ -49,6 +50,9 @@ typedef struct _ert_data_logger_entry_related ert_data_logger_entry_related;
 typedef struct _ert_data_logger_entry_params {
   bool gps_data_present;
   ert_gps_data gps_data;
+
+  bool flight_data_present;
+  ert_flight_data flight_data;
 
   uint8_t sensor_module_data_count;
   ert_sensor_module_data *sensor_module_data[ERT_DATA_LOGGER_SENSOR_MODULE_COUNT];
@@ -94,6 +98,8 @@ typedef struct _ert_data_logger {
 
   ert_data_logger_serializer *serializer;
   ert_data_logger_writer *writer;
+
+  ert_flight_manager *flight_manager;
 } ert_data_logger;
 
 int ert_data_logger_create(const char *device_name, const char *device_model,

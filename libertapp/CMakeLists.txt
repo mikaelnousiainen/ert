@@ -38,12 +38,12 @@ add_definitions(-funwind-tables)
 set(libertapp_HEADERS ert-fileutil.h
     ert-data-logger-history-reader.h
     ert-server.h ert-server-session.h ert-server-session-http.h ert-server-session-websocket.h ert-server-config.h
-    ert-handler-image-helpers.h)
+    ert-handler-image-helpers.h ert-server-status.h)
 
 set(libertapp_SOURCES ert-fileutil.c
     ert-data-logger-history-reader.c
     ert-server.c ert-server-session.c ert-server-session-http.c ert-server-session-websocket.c ert-server-config.c
-    ert-handler-image-helpers.c)
+    ert-handler-image-helpers.c ert-server-status.c)
 
 set(libertapp_LIBS rt ert websockets_shared jansson)
 

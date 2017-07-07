@@ -32,17 +32,24 @@ static int ert_node_telemetry_send_comm(ert_node_telemetry_sender_comm_context *
 {
   ert_node *node = sender_comm_context->node;
   uint32_t data_length;
-  uint8_t *data;
+  uint8_t *data = NULL;
   int result;
 
+  ert_data_logger_entry *data_logger_entry = NULL;
+
   pthread_mutex_lock(&sender_comm_context->current_entry_mutex);
+  int clone_result = ert_data_logger_clone_entry(sender_comm_context->current_entry, &data_logger_entry);
   result = ert_data_logger_serializer_msgpack_serialize_with_settings(
       node->msgpack_serializer, msgpack_settings, sender_comm_context->current_entry, &data_length, &data);
   sender_comm_context->current_entry_valid = false;
   pthread_mutex_unlock(&sender_comm_context->current_entry_mutex);
-  if (result != 0) {
+  if (clone_result < 0) {
+    ert_log_error("ert_data_logger_clone_entry failed with result: %d", clone_result);
+    goto error;
+  }
+  if (result < 0) {
     ert_log_error("ert_data_logger_serializer_msgpack_serialize failed with result: %d", result);
-    return result;
+    goto error;
   }
 
   ert_log_info("Transmitting telemetry data with size of %d bytes ...", data_length);
@@ -50,14 +57,29 @@ static int ert_node_telemetry_send_comm(ert_node_telemetry_sender_comm_context *
   result = ert_comm_protocol_transmit_buffer(node->comm_protocol, ERT_STREAM_PORT_TELEMETRY_MSGPACK,
       true, data_length, data);
   free(data);
+  data = NULL;
   if (result < 0) {
     ert_log_error("ert_node_transmit_buffer failed with result: %d", result);
-    return result;
+    goto error;
   }
 
   ert_log_info("Transmitted %d bytes of telemetry data successfully", result);
 
+  ert_event_emitter_emit(node->event_emitter, ERT_EVENT_NODE_TELEMETRY_TRANSMITTED, data_logger_entry);
+
   return 0;
+
+  error:
+  if (data != NULL) {
+    free(data);
+  }
+  if (data_logger_entry != NULL) {
+    ert_data_logger_destroy_entry(data_logger_entry);
+  }
+
+  ert_event_emitter_emit(node->event_emitter, ERT_EVENT_NODE_TELEMETRY_TRANSMISSION_FAILURE, NULL);
+
+  return result;
 }
 
 static void ert_node_sender_telemetry_comm_telemetry_collected_listener(char *event, void *data, void *context)
@@ -110,7 +132,9 @@ void *ert_node_telemetry_sender_comm(void *context)
       continue;
     }
 
-    ert_node_telemetry_send_comm(&sender_comm_context, msgpack_telemetry_full);
+    result = ert_node_telemetry_send_comm(&sender_comm_context, msgpack_telemetry_full);
+    if (result < 0) {
+    }
 
     bool transmit_minimal_telemetry =
         (telemetry_message_counter % node->config.sender_telemetry_config.minimal_telemetry_data_send_interval) == 0;

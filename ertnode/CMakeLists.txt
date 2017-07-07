@@ -39,6 +39,8 @@ configure_file(${PROJECT_SOURCE_DIR}/zlog.conf ${PROJECT_BINARY_DIR} COPYONLY)
 configure_file(${PROJECT_SOURCE_DIR}/ertnode-start.sh ${PROJECT_BINARY_DIR} COPYONLY)
 configure_file(${PROJECT_SOURCE_DIR}/ertnode-prepare-raspbian.sh ${PROJECT_BINARY_DIR} COPYONLY)
 configure_file(${PROJECT_SOURCE_DIR}/ertnode-start-dev.sh ${PROJECT_BINARY_DIR} COPYONLY)
+configure_file(${PROJECT_SOURCE_DIR}/ertnode-check.sh ${PROJECT_BINARY_DIR} COPYONLY)
+configure_file(${PROJECT_SOURCE_DIR}/ertnode-watch.sh ${PROJECT_BINARY_DIR} COPYONLY)
 
 IF (NOT EXISTS "${PROJECT_BINARY_DIR}/ertnode.yaml")
   configure_file(${PROJECT_SOURCE_DIR}/ertnode.yaml ${PROJECT_BINARY_DIR} COPYONLY)

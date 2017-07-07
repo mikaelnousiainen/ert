@@ -55,5 +55,9 @@ int ert_server_update_data_logger_entry_node(ert_server *server,
 int ert_server_update_data_logger_entry_gateway(ert_server *server,
     ert_data_logger_serializer *serializer, ert_data_logger_entry *entry);
 int ert_server_update_node_image(ert_server *server, ert_image_metadata *metadata);
+int ert_server_update_data_logger_entry_transmitted(ert_server *server, ert_data_logger_entry *entry);
+int ert_server_update_data_logger_entry_received(ert_server *server, ert_data_logger_entry *entry);
+int ert_server_record_data_logger_entry_transmission_failure(ert_server *server);
+int ert_server_record_data_logger_entry_reception_failure(ert_server *server);
 
 #endif

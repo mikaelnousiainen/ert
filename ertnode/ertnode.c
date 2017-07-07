@@ -294,7 +294,7 @@ int ert_node_process_options(int argc, char **argv,
   while (1) {
     int option_index = 0;
 
-    c = getopt_long(argc, argv, "c:l:ih", ert_node_long_options, &option_index);
+    c = getopt_long(argc, argv, "c:l:igh", ert_node_long_options, &option_index);
     if (c == -1) {
       break;
     }

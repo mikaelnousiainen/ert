@@ -65,7 +65,7 @@ Install library and tool dependencies:
 ----
 apt-get install cmake make gcc git
 apt-get install ntp gpsd libgps21 libgps-dev libyaml-0-2 libyaml-dev
-apt-get install libraspberrypi-bin webp imagemagick
+apt-get install libraspberrypi-bin webp imagemagick jq
 ----
 
 === Raspberry Pi configuration

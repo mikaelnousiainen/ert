@@ -17,6 +17,7 @@
 #include "ert-time.h"
 #include "ert-image-metadata.h"
 #include "ert-msgpack-helpers.h"
+#include "ert-jansson-helpers.h"
 
 const char *ert_image_metadata_header_id = ERT_IMAGE_METADATA_HEADER_ID;
 
@@ -230,19 +231,7 @@ int ert_image_metadata_json_serialize(ert_image_metadata *metadata, uint8_t entr
     return -EIO;
   }
 
-  int64_t timestamp_millis =
-      (int64_t) (((int64_t) metadata->timestamp.tv_sec) * 1000LL
-                 + (((int64_t) metadata->timestamp.tv_nsec) / 1000000LL));
-  result = json_object_set_new(root_obj, "timestamp_millis", json_integer(timestamp_millis));
-  if (result < 0) {
-    json_decref(root_obj);
-    ert_log_error("Error creating JSON object");
-    return -EIO;
-  }
-
-  uint8_t timestamp_string[64];
-  ert_format_iso8601_timestamp(&metadata->timestamp, 64, timestamp_string);
-  result = json_object_set_new(root_obj, "timestamp", json_string(timestamp_string));
+  result = ert_jansson_serialize_timestamp_iso8601_and_millis(root_obj, "timestamp", &metadata->timestamp);
   if (result < 0) {
     json_decref(root_obj);
     ert_log_error("Error creating JSON object");

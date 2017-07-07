@@ -42,7 +42,7 @@ set(libert_HEADERS ert.h ert-common.h ert-time.h ert-mapper.h ert-mapper-json.h 
     ert-hal-i2c.h ert-hal-i2c-linux.h
     ert-hal-gpio.h ert-hal-gpio-rpi.h ert-driver-rfm9xw.h ert-driver-rfm9xw-config.h
     ert-driver-st7036.h ert-driver-st7036-config.h
-    ert-gps.h ert-sensor.h ert-sensor-module-sysinfo.h
+    ert-gps.h ert-gps-ublox.h ert-sensor.h ert-sensor-module-sysinfo.h
     ert-comm.h ert-comm-transceiver.h ert-comm-protocol.h ert-comm-protocol-device-adapter.h
     ert-comm-device-dummy.h ert-comm-protocol-helpers.h ert-comm-protocol-config.h ert-comm-transceiver-config.h
     ert-log.h ert-data-logger.h ert-data-logger-serializer-jansson.h ert-data-logger-writer-zlog.h ert-data-logger-utils.h
@@ -50,17 +50,17 @@ set(libert_HEADERS ert.h ert-common.h ert-time.h ert-mapper.h ert-mapper-json.h 
     ert-driver-sn3218.h ert-driver-dothat-backlight.h
     ert-driver-cap1xxx.h ert-driver-dothat-touch.h ert-driver-dothat-led.h
     ert-hal-serial.h ert-hal-serial-posix.h
-    ert-driver-gsm-modem.h ert-driver-gsm-modem-config.h ert-color.h
+    ert-driver-gsm-modem.h ert-driver-gsm-modem-config.h ert-color.h ert-exif.h
     geodesic.c ert-geo.h
-    ert-image-metadata.h ert-msgpack-helpers.h ert-comm-protocol-json.h
-    ert-gps-ublox.h)
+    ert-image-metadata.h ert-jansson-helpers.h ert-msgpack-helpers.h ert-comm-protocol-json.h
+    ert-flight-manager.h)
 
 set(libert_SOURCES ert.c ert-time.c ert-mapper.c ert-mapper-json.c ert-yaml.c ert-event-emitter.c
     ert-hal.c ert-hal-spi.c ert-hal-spi-linux.c
     ert-hal-i2c.c ert-hal-i2c-linux.c
     ert-hal-gpio.c ert-hal-gpio-rpi.c ert-driver-rfm9xw.c ert-driver-rfm9xw-config.c
     ert-driver-st7036.c ert-driver-st7036-config.c
-    ert-sensor.c ert-sensor-module-sysinfo.c
+    ert-gps.c ert-gps-ublox.c ert-sensor.c ert-sensor-module-sysinfo.c
     ert-comm.c ert-comm-transceiver.c ert-comm-transceiver.c ert-comm-protocol.c ert-comm-protocol-device-adapter.c
     ert-comm-device-dummy.c ert-comm-protocol-helpers.c ert-comm-protocol-config.c ert-comm-transceiver-config.c
     ert-log.c ert-data-logger.c ert-data-logger-serializer-jansson.c ert-data-logger-writer-zlog.c ert-data-logger-utils.c
@@ -68,10 +68,10 @@ set(libert_SOURCES ert.c ert-time.c ert-mapper.c ert-mapper-json.c ert-yaml.c er
     ert-driver-sn3218.c ert-driver-dothat-backlight.c
     ert-driver-cap1xxx.c ert-driver-dothat-touch.c ert-driver-dothat-led.c
     ert-hal-serial.c ert-hal-serial-posix.c
-    ert-driver-gsm-modem.c ert-driver-gsm-modem-config.c ert-color.c
+    ert-driver-gsm-modem.c ert-driver-gsm-modem-config.c ert-color.c ert-exif.c
     geodesic.c ert-geo.c
-    ert-image-metadata.c ert-msgpack-helpers.c ert-comm-protocol-json.c
-    ert-gps-ublox.c)
+    ert-image-metadata.c ert-jansson-helpers.c ert-msgpack-helpers.c ert-comm-protocol-json.c
+    ert-flight-manager.c)
 
 set(libert_LIBS rt pthread yaml zlog jansson msgpackc libwiringPi)
 
