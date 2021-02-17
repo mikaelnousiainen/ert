@@ -25,7 +25,7 @@ can be configured to cycle through all available data automatically.
 
 The minimum hardware requirements for running `ertgateway` are:
 
-* A Raspberry Pi model A+, B+, Zero, 2B or 3B (any model with 40-pin GPIO connector)
+* A Raspberry Pi model A+, B+, Zero, 2B, 3B, 3B+ or 4B (any model with the 40-pin GPIO connector)
 ** Other single-board computers can be used by implementing support for accessing GPIO pins and
    registering GPIO interrupts.
 * A Semtech SX127x / HopeRF RFM9xW LoRa transceiver connected to Raspberry Pi SPI port.
@@ -37,13 +37,17 @@ The minimum hardware requirements for running `ertgateway` are:
 
 == Installation
 
+The installation instructions assume use of Raspberry Pi OS (formerly Raspbian).
+The current codebase has been tested on Raspberry Pi OS version 10.8, which is based on Debian 10.8 released
+on February 6th, 2021.
+
 === Installing dependencies
 
 Install library dependencies:
 
 [source,bash]
 ----
-apt-get install ntp gpsd libgps21 libgps-dev libyaml-0-2 libyaml-dev
+apt-get install build-essential git cmake ntp gpsd libgps23 libgps-dev libyaml-0-2 libyaml-dev wiringpi
 ----
 
 === Configuring Raspberry Pi
@@ -57,6 +61,9 @@ dtparam=i2c_arm=on
 
 # Enable SPI
 dtparam=spi=on
+
+# Enable SPI1 1CS (for the SPI1 bus)
+dtoverlay=spi1-1cs
 
 # Enable serial port UART for GPS (only if GPS is used)
 enable_uart=1
@@ -123,7 +130,6 @@ fudge 127.127.28.0 time1 0.0 refid GPS
 # GPS PPS reference
 server 127.127.28.1 minpoll 4 maxpoll 4 prefer
 fudge 127.127.28.1 refid PPS
-{{< /sourcecode >}}
 ----
 
 Enable GPSd and NTP daemon by executing:
@@ -146,6 +152,9 @@ Check out source code and build it:
 [source,bash]
 ----
 git clone https://github.com/mikaelnousiainen/ert.git
+cd ert
+git submodule update --init --recursive
+cd ..
 mkdir -p build/ertgateway
 cd build/ertgateway
 cmake ../../ert/ertgateway
@@ -154,7 +163,7 @@ make
 
 === Configuring `ertgateway`
 
-Configure the application by editing `ertgateway.yaml` in the `build/ertnode` directory.
+Configure the application by editing `ertgateway.yaml` in the `build/ertgateway` directory.
 
 === Running `ertgateway`
 

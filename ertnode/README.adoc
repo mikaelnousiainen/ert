@@ -40,7 +40,7 @@ web UI can be used with `ertnode`, although it is mainly useful for testing and 
 
 The minimum hardware requirements for running `ertnode` are:
 
-* A Raspberry Pi model A+, B+, Zero, 2B or 3B (any model with 40-pin GPIO connector)
+* A Raspberry Pi model A+, B+, Zero, 2B, 3B, 3B+ or 4B (any model with the 40-pin GPIO connector)
 ** Other single-board computers can be used by implementing support for accessing GPIO pins and
    registering GPIO interrupts.
 * A GPS receiver supported by `gpsd` -- any receiver outputting NMEA format data through serial port should work.
@@ -54,8 +54,9 @@ The minimum hardware requirements for running `ertnode` are:
 
 == Installation
 
-These installation instructions are for Raspberry Pi and Raspbian, but most of it should work on any distribution.
-The main difference between distributions is usually just how the dependencies and libraries are installed.
+The installation instructions assume use of Raspberry Pi OS (formerly Raspbian).
+The current codebase has been tested on Raspberry Pi OS version 10.8, which is based on Debian 10.8 released
+on February 6th, 2021.
 
 === Dependency installation
 
@@ -63,9 +64,8 @@ Install library and tool dependencies:
 
 [source,bash]
 ----
-apt-get install cmake make gcc git
-apt-get install ntp gpsd libgps21 libgps-dev libyaml-0-2 libyaml-dev
-apt-get install libraspberrypi-bin webp imagemagick jq
+apt-get install -y build-essential git cmake ntp gpsd libgps23 libgps-dev libyaml-0-2 libyaml-dev wiringpi
+apt-get install -y libraspberrypi-bin webp imagemagick jq
 ----
 
 === Raspberry Pi configuration
@@ -79,6 +79,9 @@ dtparam=i2c_arm=on
 
 # Enable SPI
 dtparam=spi=on
+
+# Enable SPI1 1CS (for the SPI1 bus)
+dtoverlay=spi1-1cs
 
 # Enable serial port UART for GPS
 enable_uart=1
@@ -170,6 +173,9 @@ Check out source code and build it:
 [source,bash]
 ----
 git clone https://github.com/mikaelnousiainen/ert.git
+cd ert
+git submodule update --init --recursive
+cd ..
 mkdir -p build/ertnode
 cd build/ertnode
 cmake ../../ert/ertnode
